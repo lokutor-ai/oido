@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../components")
 add_compile_definitions(TASR_PROFILE)
-if(TASR_1C)
+if(NOT TASR_2C)
   add_compile_definitions(TASR_SINGLE_CORE)
 endif()
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)

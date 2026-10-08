@@ -5,6 +5,7 @@
 #   TASR_MODE=mic  (default) live INMP441 microphone: speak, the transcript prints after each pause
 #   TASR_MODE=file transcribe the given clips from flash and print WER and the measured real-time factor
 #   TASR_OLED=1    also drive an SSD1306 128x64 I2C OLED (SDA GPIO8, SCL GPIO9) with the live transcript
+#   TASR_DUAL=1    experimental: split the work across both cores (wrong transcripts on silicon for now, see README)
 set -e
 PORT=$1; MODEL=$(cd "$(dirname "$2")" && pwd)/$(basename "$2"); shift 2
 LM=""; if [[ "${1:-}" == *.tlm ]]; then LM=$(cd "$(dirname "$1")" && pwd)/$(basename "$1"); shift; fi
@@ -26,8 +27,9 @@ case "$MODEL" in
 esac
 [ "$MODE" = mic ] && CFG="$CFG;sdkconfig.mic"
 SUF=""; [ -n "$TASR_OLED" ] && CFG="$CFG;sdkconfig.oled" && SUF=_oled
+[ -n "$TASR_DUAL" ] && SUF=${SUF}_2c
 B=build_${LAYOUT}_${MODE}${SUF}
-(cd firmware && idf.py -B $B -D SDKCONFIG=sdkconfig_${LAYOUT}_${MODE}${SUF} -D SDKCONFIG_DEFAULTS="$CFG" build)
+(cd firmware && idf.py -B $B -D SDKCONFIG=sdkconfig_${LAYOUT}_${MODE}${SUF} -D SDKCONFIG_DEFAULTS="$CFG" -D TASR_2C=${TASR_DUAL:-0} build)
 OUT=build_images/${LAYOUT}_${MODE}; mkdir -p $OUT
 LMARG=""; [ -n "$LM" ] && LMARG="--lm $LM"
 "$PY" tools/mkimages.py "$MODEL" $OUT --layout $LAYOUT --wavs "${WAVS[@]}" --refs "${REFS[@]}" $LMARG --merge firmware/$B --flash_mode keep

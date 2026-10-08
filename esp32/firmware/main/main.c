@@ -169,7 +169,7 @@ void app_main(void)
 #ifndef TASR_SINGLE_CORE
     g_start = xSemaphoreCreateBinary();
     g_done = xSemaphoreCreateBinary();
-    xTaskCreatePinnedToCore(worker_task, "asr_w1", 8192, NULL, configMAX_PRIORITIES - 2, NULL, 1);
+    xTaskCreatePinnedToCore(worker_task, "asr_w1", 16384, NULL, configMAX_PRIORITIES - 2, NULL, 1);
     tasr_parallel = par_for;
     ESP_LOGI(TAG, "dual-core enabled");
 #endif
