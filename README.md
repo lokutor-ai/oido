@@ -116,7 +116,7 @@ On the complete test sets (60 hours) the numbers are 13.8 / 10.9 / 15.7 / 11.3 w
 | Flash | 14.0 MB (int8), or **8.3 MB (int4), which leaves a 6 MB app partition for your own code** (`partitions_nemo4.csv`) |
 | PSRAM | 2.4 MB working memory peak for a 20 s utterance (measured in QEMU); the rest caches the most-reused weights |
 | Compute | ~225 M instructions per second of audio across both cores, ~121 M on the dual-core critical path (exact, QEMU `-icount`) |
-| Real-time factor | **estimated 0.7–0.95**: 1.3–1.6 cycles per instruction at 240 MHz, plus flash/PSRAM stalls. Not yet measured on silicon |
+| Real-time factor | **1.97 measured on an ESP32-S3 N16R8 board, one core** (Spanish model with the language model, 4.7 s clip, `TASR_MODE=file`); streaming 1.93. Firmware builds use one core by default: see [Dual core](#dual-core) |
 | Latency | Utterance mode. Text appears after a 0.8 s pause plus compute: about 3 s for a 2–4 s command. [Streaming mode](#low-latency-streaming-mode) cuts this to about 1.1–1.4 s |
 
 ## Low-latency streaming mode
@@ -146,6 +146,15 @@ when you stop only the last partial chunk is left to compute. Partial text appea
 - The transcripts of the firmware under QEMU match the laptop build on the clips we compared (see
   [`results/en_stream_v2.json`](results/en_stream_v2.json)).
 
+## Dual core
+
+`TASR_DUAL=1 esp32/tools/flash.sh ...` splits each job across both cores. On silicon this mode is **not correct yet**:
+transcripts come out wrong, or the firmware crashes, when both cores run the PIE kernels at the same time. The same
+split is correct when its two halves run one after the other, when all the work runs on the second core, and when the
+PIE kernels are compiled out (`TASR_NO_SIMD`), so the cause is concurrent PIE execution on the two cores, not the work
+split. Until it is fixed, firmware builds run on one core. QEMU's estimate for two cores was a real-time factor of
+0.7–0.95.
+
 ## How it works
 
 - **Front end:** log-mel features, then 2× (3×3, stride 2) convolution subsampling to 25 Hz.
@@ -156,7 +165,7 @@ when you stop only the last partial chunk is left to compute. Partial text appea
 The engine (`esp32/components/tinyasr`) is new C written for the ESP32-S3's PIE vector unit:
 - int8 matrix kernels on `EE.VMULAS.S8.ACCX` (16 MACs per instruction), plus int4 outer-product kernels;
 - int8 relative-position attention with a lookup-table softmax;
-- dual-core scheduling;
+- dual-core scheduling (experimental, see [Dual core](#dual-core));
 - tiling so that each weight is streamed from flash once per 64 frames (weight traffic cut from 18 to 7.5 MB/s);
 - a VAD/AGC utterance segmenter;
 - an optional SSD1306 OLED that shows the live transcript.
