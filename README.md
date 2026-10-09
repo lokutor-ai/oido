@@ -195,9 +195,12 @@ layer's output; clip: a 3.8 s VoxPopuli sentence; every line below is 3 runs):
 - Even a correct two-core mode would not reach real time on this evidence: the incorrect spin-wait build ran at 0.78 × the one-core time, not the 0.55 the
   instruction counts promised, so the cores contend for memory.
 
-Our best guess is a hardware margin problem at 240 MHz under the heaviest dual-core load (supply droop or timing margin on this cheap board), not a race in
-our code, but we have not measured the supply. If you have an ESP32-S3 with a stiff 5 V supply (powered hub, short cable) or another board revision, please try
-`TASR_DUAL=1` and tell us what you see (`python esp32/tools/dual_bisect.py --help`).
+We do not know the cause. A hardware margin problem at 240 MHz (supply droop or timing) fits the 160 MHz result, the random values and the
+`IllegalInstruction` crashes, but a second engine (Lokutor's Ito TTS) running a synthetic two-core stress of the same shape on the same board at 240 MHz
+(K = 704, 64 rows, a shared 45 KB tile in internal SRAM, an 88/88 split, 3 × 90 s, plus other shapes, about 21 minutes in all, every call checked against a one-core reference) saw no mismatch and no
+crash, and its real firmware passed a 600-iteration soak. So a plain supply problem on this board looks unlikely; something specific to our kernel, to
+how the two cores are started and joined, or to streaming weights from external memory in lock-step is more likely, and we have not found it. If you can,
+try `TASR_DUAL=1` on another board or supply and tell us what you see (`python esp32/tools/dual_bisect.py --help`).
 
 ## How it works
 
