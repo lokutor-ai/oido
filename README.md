@@ -192,6 +192,15 @@ layer's output; clip: a 3.8 s VoxPopuli sentence; every line below is 3 runs):
 - **Not the cause**: PSRAM speed (80 → 40 MHz), data-cache line size (64 → 32 B), weights in flash versus PSRAM, FreeRTOS semaphores (a spin-wait barrier
   behaves the same), interrupts (masked while a job runs), where the activation tile lives (PSRAM, or a private copy for the second core), instruction
   fetch (kernel in IRAM, or a separate copy of the kernel per core), the split itself (by rows instead of by output channels).
+- **Also not the cause** (a second investigation on another board of the same kind, ESP32-S3 rev v0.2 with octal PSRAM):
+  - the engine's C code: two real threads on a laptop give the reference transcripts, and Valgrind's race detector (`helgrind`) finds no data race;
+  - erratum CACHE-126: writing the whole data cache back with interrupts masked before every job, as the erratum's workaround describes, does not help;
+  - flash and PSRAM at 40 MHz;
+  - a FreeRTOS context switch: the failure persists with both cores spinning on shared flags.
+
+  Two results from that board narrow it down:
+  - Espressif's esp-nn bit-exactness tests with its own two-core mode pass on it (326 of 326, buffers in PSRAM). The chip can run PIE kernels on both cores; the trigger is specific to our workload.
+  - With the whole engine linked into IRAM, the two-core language-model, front-end and im2col jobs pass repeatedly, but the encoder matrix products still crash inside the dot-product loop.
 - Even a correct two-core mode would not reach real time on this evidence: the incorrect spin-wait build ran at 0.78 × the one-core time, not the 0.55 the
   instruction counts promised, so the cores contend for memory.
 
