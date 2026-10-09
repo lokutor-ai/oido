@@ -1,6 +1,15 @@
 #include "kernels.h"
 #include <math.h>
 #include <string.h>
+#if defined(CONFIG_TASR_EXP_DOT_DUP)
+#include "esp_cpu.h"
+#endif
+#if defined(CONFIG_TASR_EXP_DOT_IRAM)
+#include "esp_attr.h"
+#define TASR_DOT_ATTR IRAM_ATTR
+#else
+#define TASR_DOT_ATTR
+#endif
 
 #if defined(ESP_PLATFORM) && defined(CONFIG_IDF_TARGET_ESP32S3) && !defined(TASR_NO_SIMD)
 #define TASR_PIE 1
@@ -17,7 +26,8 @@ static inline int rne(float x)
 // ESP32-S3 PIE: 16 int8 MACs per instruction into the 40-bit ACCX accumulator.
 // The asm uses the zero-overhead loop registers; the enclosing C loop must not become a hardware loop,
 // hence no-branch-count-reg (disables GCC's doloop / zero-overhead loop generation for this function).
-__attribute__((noinline, optimize("no-branch-count-reg"))) void tasr_dot_rows_s8(const int8_t *w, const int8_t *x, int ldq,
+#if defined(CONFIG_TASR_EXP_DOT_DUP)
+__attribute__((noinline, optimize("no-branch-count-reg"))) void tasr_dot_rows_s8_core0(const int8_t *w, const int8_t *x, int ldq,
                                                                                  int T, int kp, int32_t *out)
 {
     const int n = kp >> 4;
@@ -57,6 +67,97 @@ __attribute__((noinline, optimize("no-branch-count-reg"))) void tasr_dot_rows_s8
         out[t] = r;
     }
 }
+__attribute__((noinline, optimize("no-branch-count-reg"))) void tasr_dot_rows_s8_core1(const int8_t *w, const int8_t *x, int ldq,
+                                                                                 int T, int kp, int32_t *out)
+{
+    const int n = kp >> 4;
+    for (int t = 0; t < T; t++) {
+        const int8_t *pa = x + (size_t)t * ldq, *pb = w;
+        int m = n;
+        int32_t r;
+        if (m & 1) {
+            __asm__ volatile(
+                "ee.zero.accx\n"
+                "ee.vld.128.ip q0, %0, 16\n"
+                "ee.vld.128.ip q1, %1, 16\n"
+                "ee.vmulas.s8.accx q0, q1\n"
+                : "+r"(pa), "+r"(pb) : : "memory");
+            m -= 1;
+        } else {
+            __asm__ volatile("ee.zero.accx\n" ::: "memory");
+        }
+        if (m) {
+            int pairs = m >> 1;
+            __asm__ volatile(
+                "ee.vld.128.ip q0, %0, 16\n"
+                "ee.vld.128.ip q1, %1, 16\n"
+                "addi %2, %2, -1\n"
+                "loopnez %2, 1f\n"
+                "  ee.vld.128.ip q2, %0, 16\n"
+                "  ee.vmulas.s8.accx.ld.ip q3, %1, 16, q0, q1\n"
+                "  ee.vld.128.ip q0, %0, 16\n"
+                "  ee.vmulas.s8.accx.ld.ip q1, %1, 16, q2, q3\n"
+                "1:\n"
+                "ee.vld.128.ip q2, %0, 16\n"
+                "ee.vmulas.s8.accx.ld.ip q3, %1, 16, q0, q1\n"
+                "ee.vmulas.s8.accx q2, q3\n"
+                : "+r"(pa), "+r"(pb), "+r"(pairs) : : "memory");
+        }
+        __asm__ volatile("rur.accx_0 %0\n" : "=r"(r));
+        out[t] = r;
+    }
+}
+
+#if defined(CONFIG_TASR_EXP_DOT_DUP)
+// experiment: each core runs its own copy of the kernel (different instruction addresses)
+void tasr_dot_rows_s8(const int8_t *w, const int8_t *x, int ldq, int T, int kp, int32_t *out)
+{
+    if (esp_cpu_get_core_id()) tasr_dot_rows_s8_core1(w, x, ldq, T, kp, out);
+    else tasr_dot_rows_s8_core0(w, x, ldq, T, kp, out);
+}
+#endif
+#else
+TASR_DOT_ATTR __attribute__((noinline, optimize("no-branch-count-reg"))) void tasr_dot_rows_s8(const int8_t *w, const int8_t *x, int ldq,
+                                                                                 int T, int kp, int32_t *out)
+{
+    const int n = kp >> 4;
+    for (int t = 0; t < T; t++) {
+        const int8_t *pa = x + (size_t)t * ldq, *pb = w;
+        int m = n;
+        int32_t r;
+        if (m & 1) {
+            __asm__ volatile(
+                "ee.zero.accx\n"
+                "ee.vld.128.ip q0, %0, 16\n"
+                "ee.vld.128.ip q1, %1, 16\n"
+                "ee.vmulas.s8.accx q0, q1\n"
+                : "+r"(pa), "+r"(pb) : : "memory");
+            m -= 1;
+        } else {
+            __asm__ volatile("ee.zero.accx\n" ::: "memory");
+        }
+        if (m) {
+            int pairs = m >> 1;
+            __asm__ volatile(
+                "ee.vld.128.ip q0, %0, 16\n"
+                "ee.vld.128.ip q1, %1, 16\n"
+                "addi %2, %2, -1\n"
+                "loopnez %2, 1f\n"
+                "  ee.vld.128.ip q2, %0, 16\n"
+                "  ee.vmulas.s8.accx.ld.ip q3, %1, 16, q0, q1\n"
+                "  ee.vld.128.ip q0, %0, 16\n"
+                "  ee.vmulas.s8.accx.ld.ip q1, %1, 16, q2, q3\n"
+                "1:\n"
+                "ee.vld.128.ip q2, %0, 16\n"
+                "ee.vmulas.s8.accx.ld.ip q3, %1, 16, q0, q1\n"
+                "ee.vmulas.s8.accx q2, q3\n"
+                : "+r"(pa), "+r"(pb), "+r"(pairs) : : "memory");
+        }
+        __asm__ volatile("rur.accx_0 %0\n" : "=r"(r));
+        out[t] = r;
+    }
+}
+#endif
 #else
 void tasr_dot_rows_s8(const int8_t *w, const int8_t *x, int ldq, int T, int kp, int32_t *out)
 {

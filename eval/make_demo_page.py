@@ -98,9 +98,14 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--max_dur", type=float, default=11.0)
     ap.add_argument("--render_only", action="store_true", help="rewrite index.html from samples/results.json")
+    ap.add_argument("--board", default="", help="board_bench.py results for the same clips: use the board's transcripts and times")
     a = ap.parse_args()
     if a.render_only:
-        write_html(a.out, json.load(open(os.path.join(a.out, "samples", "results.json"))), load_robust())
+        clips = json.load(open(os.path.join(a.out, "samples", "results.json")))
+        if a.board:
+            apply_board(clips, a.board)
+            json.dump(clips, open(os.path.join(a.out, "samples", "results.json"), "w"), indent=1)
+        write_html(a.out, clips, load_robust())
         return
     repo = os.path.abspath(a.repo)
     sys.path.insert(0, os.path.join(repo, "esp32", "host"))
@@ -166,18 +171,36 @@ def load_robust():
     return rob
 
 
+def apply_board(clips, board_json):
+    """Replace the emulator's transcripts and the estimated times by what a real ESP32-S3 board produced and took
+    (board_bench.py output for the same clips, one core)."""
+    import jiwer
+    board = json.load(open(board_json))["clips"]
+    assert len(board) == len(clips)
+    for c, b in zip(clips, board):
+        assert abs(b["dur"] - c["dur"]) < 0.01 and b["ref"] == c["ref"], (b["ref"], c["ref"])
+        c["emu_hyp"] = c.get("emu_hyp", c["hyp"])
+        c["hyp"] = b["hyp"]
+        c["board_s"] = b["rtf"] * b["audio"]
+        c["chip_match"] = c["hyp"] == c["host_hyp"].strip()
+        c["wer"] = 100 * jiwer.wer(c["ref"], c["hyp"]) if c["hyp"] else 100.0
+        c["emu_match"] = c["hyp"] == c["emu_hyp"]
+        c.pop("t", None)
+    return clips
+
+
 def write_html(out, clips, rob):
     def row(c, first_col):
-        lo, hi = c["t"]
+        t = c["board_s"]
         return (f"<tr><td>{first_col}</td><td><audio controls preload=\"none\" src=\"{c['mp3']}\"></audio>"
                 f"<div class=\"small\">{c['dur']:.1f} s</div></td>"
                 f"<td>{html.escape(c['ref'])}</td><td>{marked(c['ref'], c['hyp'])}</td>"
                 f"<td class=\"num\">{c['wer']:.0f}%</td>"
-                f"<td class=\"num\">{lo:.1f}&ndash;{hi:.1f} s<div class=\"small\">RTF {lo/c['dur']:.2f}&ndash;{hi/c['dur']:.2f}"
+                f"<td class=\"num\">{t:.1f} s<div class=\"small\">RTF {t/c['dur']:.2f}"
                 f"<br>{c['instr']/1e6:.0f} M instructions</div></td></tr>")
 
     head = ("<tr><th>{}</th><th>Audio</th><th>Reference</th><th>Oído on the ESP32-S3</th><th>WER</th>"
-            "<th>On-chip compute (est.)</th></tr>")
+            "<th>Compute on the board</th></tr>")
     rooms = [c for c in clips if c["group"] == "rooms"]
     sents = list(dict.fromkeys(c["sent"] for c in rooms))
     parts = []
@@ -210,7 +233,7 @@ audio {{ width: 210px; height: 32px; }}
 .wrap {{ overflow-x: auto; }}
 </style></head><body>
 <h1>Oído: open-vocabulary speech recognition on a $5 microcontroller</h1>
-<p>Lokutor &middot; <span class="small">ESP32-S3, 240 MHz dual-core, 8 MB PSRAM, no neural accelerator</span></p>
+<p>Lokutor &middot; <span class="small">ESP32-S3, 240 MHz, 8 MB PSRAM, no neural accelerator; measured on one core</span></p>
 <p class="links"><a href="https://github.com/lokutor-ai/oido">Code</a>
 <a href="https://huggingface.co/lokutor-ai/oido-ctc-small-int8">Model (int8)</a>
 <a href="https://huggingface.co/lokutor-ai/oido-ctc-small-int4">Model (int4)</a>
@@ -224,13 +247,12 @@ language model used on this page.</p>
 <p><b>How to read this page.</b> Every clip below was picked at random with a fixed seed, not chosen for looking
 good, and every error is shown: <span class="err">wrong or extra words</span> in red,
 <span class="del">missed words</span> struck through. Transcripts come from the released firmware (int8 model +
-on-chip language model) running in Espressif's ESP32-S3 emulator. The laptop build of the same C code gives an
-identical transcript on {match} of these {len(clips)} clips; on the others the chip's math library rounds the last
-bit differently from the laptop's and a word or two changes, always on the hard (noisy) clips. <i>On-chip compute</i>
-is the exact number of instructions
-the firmware executed, converted to time at 1.3&ndash;1.6 cycles per instruction on 240 MHz plus an allowance for
-memory stalls. These are estimates until the board measurements are published. Text appears after a 0.8 s pause
-plus this compute time.</p>
+on-chip language model) running on a physical ESP32-S3 board. The laptop build of the same C code gives an
+identical transcript on {match} of these {len(clips)} clips; on the others the laptop's math library rounds the last
+bit differently from the chip's and a word or two changes, always on the hard (noisy) clips. <i>Compute on the
+board</i> is the time the chip took, measured with its 64-bit timer, on one of its two cores; the chip does not run in
+real time yet (RTF is compute time divided by the length of the audio, here about 2). The same firmware in the
+emulator produced the same transcripts. Text appears after a 0.8 s pause plus this compute time.</p>
 
 <h2>Same sentence, different rooms</h2>
 <p>Two LibriSpeech test-clean sentences mixed with real noise recordings (DEMAND), other talkers, and simulated

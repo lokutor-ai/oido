@@ -23,6 +23,56 @@ menu "tinyasr"
             Silence after speech before the utterance is closed and its final text printed. With a streaming
             model almost all compute is done by then, so this pause is most of the latency; voice agents
             typically use 400-600 ms (or their own turn detector).
+    config TASR_BENCH_PACED
+        bool "File mode: also stream every clip at real-time pace and report when the final text appears"
+        default n
+        help
+            Benchmark builds only. The clip is fed in 20 ms blocks, each one when its last sample would have been
+            spoken, so the delay of the final text after the end of speech includes any backlog if the chip is slower
+            than real time.
+
+    config TASR_EXP_NO_PSRAM_WEIGHTS
+        bool "Experiment: keep all weights in flash (no copies in PSRAM)"
+        default n
+
+    config TASR_EXP_SPIN_PARFOR
+        bool "Experiment: two-core parallel-for with spin-waiting instead of FreeRTOS semaphores"
+        default n
+
+    config TASR_EXP_NOINT
+        bool "Experiment (with spin-wait): interrupts masked on both cores while a job runs"
+        depends on TASR_EXP_SPIN_PARFOR
+        default n
+
+    config TASR_PAR_MASK
+        int "Experiment: bit mask of the parallel call sites that use both cores (0 gives all-serial); unset = all"
+        default 511
+        depends on TASR_EXP_PAR_MASK_ON
+
+    config TASR_EXP_PAR_MASK_ON
+        bool "Experiment: enable TASR_PAR_MASK"
+        default n
+
+    config TASR_EXP_XQ_COPY
+        bool "Experiment: worker 1 reads a private copy of the activation tile in the K=704 GEMMs"
+        default n
+
+    config TASR_EXP_XQ_PSRAM
+        bool "Experiment: activation tile in PSRAM instead of internal SRAM"
+        default n
+
+    config TASR_EXP_DOT_DUP
+        bool "Experiment: each core runs its own copy of the dot-product kernel"
+        default n
+
+    config TASR_EXP_DOT_IRAM
+        bool "Experiment: dot-product kernel in IRAM"
+        default n
+
+    config TASR_EXP_ROWSPLIT
+        bool "Experiment: split the K=704 matrix products over rows instead of output channels"
+        default n
+
     config TASR_OLED
         bool "SSD1306 128x64 I2C OLED showing the live transcript"
         default n

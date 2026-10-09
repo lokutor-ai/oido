@@ -16,12 +16,14 @@ Models on Hugging Face: [int8](https://huggingface.co/lokutor-ai/oido-ctc-small-
 reverberant rooms and real meetings, each with the reference, the on-chip transcript (errors marked) and the compute
 it took on the chip.
 
-> **Status (2 October 2026).** Accuracy numbers come from the host build of the engine, which compiles the same C code
-> as the firmware (same int8 arithmetic). Under Espressif's QEMU emulator the firmware gives identical transcripts on
-> most utterances; the laptop's math library and the chip's round the last bit differently, which can change a word on
-> some hard, noisy clips (22 of 27 random clips identical, see the [audio samples](https://lokutor-ai.github.io/oido/)).
-> Real-time speed is **estimated** from exact emulator instruction counts. Measurements on physical boards follow in the
-> next days and will be added here.
+> **Status (9 October 2026).** Measured on an ESP32-S3-WROOM-1-N16R8 board, one core at 240 MHz: the English int8 model with
+> the language model runs at **1.97× real time** (1.91–2.02 over 27 clips of 3.6–10.6 s). Spanish runs at 2.06×, int4 at 1.76×,
+> the transducer at 1.89× (see [Speed and memory](#speed-and-memory)). **That is not real time yet:** a 4-second command shows its
+> text about 8.7 s after it ends (including the 0.8 s end-of-speech wait). The two-core mode, which emulation had predicted would
+> approach real time, gives wrong transcripts on silicon and is disabled (see [Dual core](#dual-core)).
+> The board's transcripts are identical to the instruction-exact emulator's on all 27 clips. Accuracy numbers come from the host
+> build of the same C code; it differs from the board on some hard clips because of the laptop's math library (22 of the 27
+> clips are identical, and the word error rate on those 27 clips is the same, 7.14 %).
 
 ## Which model should I use?
 
@@ -31,15 +33,16 @@ There is **one model per language**, and the models that stream also run in full
 |---|---|---|---|---|---|
 | The best English accuracy | `models/nemo8.tnm` + `nemo_lm.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-ctc-small-int8)) | English | utterance only: text about 3 s after you stop | 14.0 + 1.3 MB | CC-BY-4.0 |
 | English with the least flash | `models/nemo4.tnm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-ctc-small-int4)) | English | utterance only | 8.3 MB | CC-BY-SA-4.0 |
-| English, low latency (voice agents) | `models/oido_stream.tnm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-ctc-small-stream-int8)) | English | **streaming** (final text about 1.1-1.4 s after you stop, estimated) and full-context | 14.0 MB | CC-BY-SA-4.0 |
+| English, low latency (voice agents) | `models/oido_stream.tnm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-ctc-small-stream-int8)) | English | **streaming** (final text about 4 s after a 4 s command ends, measured; see [below](#low-latency-streaming-mode)) and full-context | 14.0 MB | CC-BY-SA-4.0 |
 | Spanish | `models/oido_es.tnm` + `oido_es.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-es-ctc-small-int8)) | Spanish | **streaming and full-context, in the same file** | 14.0 + 1.3 MB | CC-BY-4.0 |
 
 - **Streaming vs utterance:** `oido_stream.tnm` and `oido_es.tnm` carry a streaming flag. The firmware's microphone mode and
   `live_demo.py` stream with them automatically; the full-context (utterance) accuracy figures in the tables come from the
   same files run through `tasr_nemo_transcribe` / `eval_engine.py`. The original English models (`nemo8`, `nemo4`) are
   utterance-only.
-- **What streaming costs:** some accuracy (English LibriSpeech 4.9 / 11.0 instead of 3.3 / 7.2 with the language model),
-  and estimated speed on the real chip is still unmeasured.
+- **What streaming costs:** some accuracy (English LibriSpeech 4.9 / 11.0 instead of 3.3 / 7.2 with the language model).
+  On the board it runs at 1.96× real time on one core, so the final text arrives about half as late as in utterance mode
+  (4.1–11.1 s after clips of 3.6–10.6 s, against 7.2–22.4 s), not within 1–2 s.
 - **No bilingual model:** English and Spanish have different vocabularies, so each is its own file.
 
 ## Accuracy
@@ -104,20 +107,40 @@ On the complete test sets (60 hours) the numbers are 13.8 / 10.9 / 15.7 / 11.3 w
 - The language model weights (0.5 / 1.5) were picked from a small grid on subsets of the test sets; the optimum is flat
   (all of 0.4–0.6 / 1.5–2.0 are within 0.2 points).
 - The model writes numbers as words (*veinte*), not digits.
-- Under Espressif's emulator the firmware's transcripts match the laptop build on most utterances; on uncertain ones the
-  last-bit rounding of the math library can change a word (2 of 3 clips we compared). Speed on silicon is estimated, as
-  for English.
+- On the board the Spanish model runs at 2.06× real time (12 FLEURS clips, one core). Its transcripts equal the host build's on
+  9 of the 12 clips; on the others a single uncertain word differs because of the math library. On these 12 clips the board
+  scores 9.3 % WER against 7.3 % for the host build (205 words, a difference of four words).
 - It works in both modes: `python live_demo.py --model es` streams, and utterance mode runs the same file.
 
 ## Speed and memory
 
+Measured on one ESP32-S3-WROOM-1-N16R8 board (DevKitC-1 class), ESP-IDF 5.5.1, CPU 240 MHz, flash QIO, octal PSRAM 80 MHz,
+**one core**, `TASR_MODE=file` (clips in flash, timed with the 64-bit microsecond timer). Raw numbers:
+[`results/board_esp32s3.json`](results/board_esp32s3.json).
+
+| Model (with its language model unless noted) | Clips | Real-time factor (range) | Same transcript as the host build |
+|---|---|---|---|
+| English int8 (`nemo8.tnm`) | 27 (215 s) | **1.97** (1.91–2.02) | 22 / 27 (**27 / 27 identical to the emulator**) |
+| English int4 (`nemo4.tnm`) | 10 (59 s) | 1.76 (1.73–1.83) | 8 / 10 |
+| Transducer int8, no LM | 10 (70 s) | 1.89 (1.88–1.91) | 10 / 10 |
+| Streaming-trained model, utterance mode | 12 (90 s) | 2.04 (1.98–2.11) | 12 / 12 |
+| Streaming-trained model, streaming (32-frame chunks) | 12 (90 s) | 1.96 | 10 / 12 |
+| Spanish, utterance mode | 12 (103 s) | 2.06 (1.98–2.13) | 9 / 12 |
+| Spanish, streaming | 12 (103 s) | 1.97 | not compared |
+
 | | |
 |---|---|
 | Flash | 14.0 MB (int8), or **8.3 MB (int4), which leaves a 6 MB app partition for your own code** (`partitions_nemo4.csv`) |
-| PSRAM | 2.4 MB working memory peak for a 20 s utterance (measured in QEMU); the rest caches the most-reused weights |
-| Compute | ~225 M instructions per second of audio across both cores, ~121 M on the dual-core critical path (exact, QEMU `-icount`) |
-| Real-time factor | **1.97 measured on an ESP32-S3 N16R8 board, one core** (Spanish model with the language model, 4.7 s clip, `TASR_MODE=file`); streaming 1.93. Firmware builds use one core by default: see [Dual core](#dual-core) |
-| Latency | Utterance mode. Text appears after a 0.8 s pause plus compute: about 3 s for a 2–4 s command. [Streaming mode](#low-latency-streaming-mode) cuts this to about 1.1–1.4 s |
+| PSRAM | 2.4 MB working memory peak for a 20 s utterance (measured in QEMU); the rest caches the most-reused weights. On the board, at least 1.4 MB of PSRAM stayed free on clips of up to 10.6 s (0.3–0.4 MB with the streaming caches) |
+| Internal RAM | at least 122 KB free (72 KB with the streaming caches) |
+| Compute | the board spends 461 M cycles per second of audio, **2.0 cycles per executed instruction**: every stage costs 1.3–2.4 cycles per instruction (the im2col gather 3.7), so on one core the time is set by the number of instructions the kernels issue, not by waiting for weights. 220 M instructions per second of audio across both cores (exact, QEMU `-icount`) |
+| Latency, utterance mode | the text of a 3.6–3.8 s command appears 6.9–7.4 s after it ends, plus the 0.8 s end-of-speech wait |
+| Latency, streaming mode | 4.1–4.2 s after a 3.6–3.8 s command ends (see [below](#low-latency-streaming-mode)) |
+| What would make it real time | the second core (a perfect split of the 55 % of instructions on the critical path would give about 1.1×; not measured) and faster kernels. Both are open, see [Dual core](#dual-core) |
+
+The firmware's transcripts equal the emulator's on all 27 clips, and for the two clips we traced layer by layer the activations
+of every stage are bit-identical between the board and the emulator. The host build differs in the last bit of the log-mel
+features (the laptop's math library), which changes a word on some hard clips.
 
 ## Low-latency streaming mode
 
@@ -126,34 +149,55 @@ than the last tenth of a percent of accuracy. `models/oido_stream.tnm` is the sa
 audio **as it arrives**: the encoder processes 1.28 s chunks (32 frames) with 5 s of left context while you speak, so
 when you stop only the last partial chunk is left to compute. Partial text appears while you talk.
 
-| Mode (all on the ESP32-S3 engine, with the language model) | LibriSpeech clean / other | Mean WER, 14 noise and reverb conditions | Final text after you stop (estimated) |
+| Mode (all on the ESP32-S3 engine, with the language model) | LibriSpeech clean / other | Mean WER, 14 noise and reverb conditions | Final text after the clip ends, measured on the board (one core) |
 |---|---|---|---|
-| Utterance mode, released `nemo8.tnm` | 3.3 / 7.2 | 7.5 | ~3.0–3.4 s for a 2–4 s command |
-| **Streaming, 32-frame chunks** | 4.9 / 11.0 | 9.0 | **~1.1–1.4 s** |
-| Streaming, 16-frame chunks (0.64 s) | 6.1 / 13.2 | n/a | ~1.1–1.3 s, but see the speed note |
-| Same `oido_stream.tnm`, full-context mode | 3.4 / 7.8 | 6.2 | as utterance mode |
+| Utterance mode, released `nemo8.tnm` | 3.3 / 7.2 | 7.5 | 6.9–21.3 s for clips of 3.6–10.6 s (about 7 s for a 3.7 s command) |
+| **Streaming, 32-frame chunks** | 4.9 / 11.0 | 9.0 | **4.1–11.1 s** (about 4 s for a 3.7 s command) |
+| Streaming, 16-frame chunks (0.64 s) | 6.1 / 13.2 | n/a | not measured |
+| Same `oido_stream.tnm`, full-context mode | 3.4 / 7.8 | 6.2 | 7.2–22.4 s |
 
-- The final text arrives 0.8 s (the end-of-speech pause, `CONFIG_TASR_SEG_HANG_MS`, or `live_demo.py --pause`) plus
-  0.25–0.6 s of compute for the last chunk and a pass over the weights. Voice agents with their own turn detector can
-  use a shorter pause.
+- **What we measured.** When the chip has kept up with the audio, the last step after the final chunk takes 1.1 s on average on the board
+  (0.8–1.7 s over 12 clips). But on one core the chip runs at 1.96× real time, so it falls behind the speaker and the backlog grows
+  with the length of the utterance. Feeding six clips at the rate of speech (one 20 ms block when its last sample would have been spoken), the final text appeared
+  4.1–11.1 s after the last sample (3.6–10.6 s clips; mean 6.7 s), roughly (RTF − 1) × duration plus that last step. The 0.8 s end-of-speech
+  wait (`CONFIG_TASR_SEG_HANG_MS`, or `live_demo.py --pause`) comes on top. Streaming halves the wait; it does not give the 1.1–1.4 s we had estimated
+  from instruction counts before we had a board. That needs a real-time factor below one.
 - It was trained with the original model's weights as a starting point and noise, music, babble and reverberation
   augmentation (MUSAN, simulated rooms), so it is as robust as the utterance model. The accuracy cost is the chunking:
   the encoder cannot see what comes after the chunk.
-- **Speed is the open question.** Instruction counts are exact, but this chip is limited by how fast weights can be read
-  from flash and PSRAM, and a chunk re-reads them every chunk (4× as often at 16 frames as the 64-frame blocks of
-  utterance mode). Estimated real-time factor while speaking: **0.80–1.00 at 32 frames**, 0.96–1.24 at 16 frames (which
-  may fall behind). All of this is estimated, not measured on silicon; board numbers will replace it.
-- The transcripts of the firmware under QEMU match the laptop build on the clips we compared (see
-  [`results/en_stream_v2.json`](results/en_stream_v2.json)).
+- **Cost of chunking.** A chunk re-reads every weight, so weight traffic is 2× the 64-frame blocks of utterance mode at 32 frames and 4× at 16 frames.
+  On the board this does not show at the chip's present speed: streaming at 32 frames runs at 1.96× real time, slightly faster than the same model in
+  utterance mode (2.04×), because one core is limited by instruction issue. It may matter once both cores work.
+- On the board, the streaming model's transcripts equal the host build's on 10 of 12 clips in streaming mode and 12 of 12 in utterance mode.
 
 ## Dual core
 
-`TASR_DUAL=1 esp32/tools/flash.sh ...` splits each job across both cores. On silicon this mode is **not correct yet**:
-transcripts come out wrong, or the firmware crashes, when both cores run the PIE kernels at the same time. The same
-split is correct when its two halves run one after the other, when all the work runs on the second core, and when the
-PIE kernels are compiled out (`TASR_NO_SIMD`), so the cause is concurrent PIE execution on the two cores, not the work
-split. Until it is fixed, firmware builds run on one core. QEMU's estimate for two cores was a real-time factor of
-0.7–0.95.
+`TASR_DUAL=1 esp32/tools/flash.sh ...` splits each job across both cores. On our boards at 240 MHz this mode is **not correct**: transcripts come out
+wrong, or the firmware crashes, when both cores run the heavy matrix products at the same time (Guillermo found this first). The same split is correct
+when its two halves run one after the other, when all the work runs on the second core, and with the PIE kernels compiled out (`TASR_NO_SIMD`). Until it is
+understood, firmware builds run on one core. QEMU's estimate for two cores was a real-time factor of 0.7–0.95; QEMU executes the cores in coarse
+alternation and cannot show this.
+
+What we established on 9 October with one board (tools: `esp32/tools/dual_bisect.py`, `dump_cmp.py`; builds with `TASR_DEBUG_SUMS=1` print a hash of every
+layer's output; clip: a 3.8 s VoxPopuli sentence; every line below is 3 runs):
+
+- **One core is exactly reproducible**: 166 hashes identical in every run, and identical to the emulator's.
+- **Two cores at 240 MHz corrupt activations at random places** (the hash values differ from run to run), always first in layer 1 or 2, almost always in the
+  feed-forward block of layer 1; in roughly one run in eight the firmware crashes with `IllegalInstruction` and a corrupted backtrace, which looks like corrupted
+  instruction or data fetches rather than a logic error.
+- **Two cores at 160 MHz are correct**: 166 of 166 hashes identical to the one-core run, 3 of 3 runs (but no faster than one core at 240 MHz).
+- Parallelizing everything except the matrix products is correct; parallelizing only the matrix products fails. Among them, the K=176 products and the
+  front-end K=3520 products are correct on two cores, and the K=704 ones (the second linear layer of each feed-forward block) corrupt. These move the most
+  weight data per cycle.
+- **Not the cause**: PSRAM speed (80 → 40 MHz), data-cache line size (64 → 32 B), weights in flash versus PSRAM, FreeRTOS semaphores (a spin-wait barrier
+  behaves the same), interrupts (masked while a job runs), where the activation tile lives (PSRAM, or a private copy for the second core), instruction
+  fetch (kernel in IRAM, or a separate copy of the kernel per core), the split itself (by rows instead of by output channels).
+- Even a correct two-core mode would not reach real time on this evidence: the incorrect spin-wait build ran at 0.78 × the one-core time, not the 0.55 the
+  instruction counts promised, so the cores contend for memory.
+
+Our best guess is a hardware margin problem at 240 MHz under the heaviest dual-core load (supply droop or timing margin on this cheap board), not a race in
+our code, but we have not measured the supply. If you have an ESP32-S3 with a stiff 5 V supply (powered hub, short cable) or another board revision, please try
+`TASR_DUAL=1` and tell us what you see (`python esp32/tools/dual_bisect.py --help`).
 
 ## How it works
 
@@ -192,7 +236,16 @@ esp32/tools/flash.sh /dev/ttyUSB0 models/nemo4.tnm              # int4: 8.3 MB, 
 TASR_OLED=1 esp32/tools/flash.sh /dev/ttyUSB0 models/nemo8.tnm  # + transcript on the OLED
 TASR_MODE=file esp32/tools/flash.sh /dev/ttyUSB0 models/nemo8.tnm clip.wav "reference"   # prints measured RTF
 NO_LM=1 esp32/tools/flash.sh /dev/ttyUSB0 models/nemo8.tnm      # greedy decoding, no language model
+TASR_MODE=file TASR_PACED=1 esp32/tools/flash.sh <port> models/oido_stream.tnm clip.wav "reference"   # streaming models: also feed at the rate of speech and print when the final text appears
 ```
+
+Boards with the **native USB port** (`/dev/cu.usbmodem*`, `/dev/ttyACM*`): after flashing, a normal reset leaves the chip in download mode, so `flash.sh` boots the
+application with `esptool --after watchdog_reset`; if you read the console yourself, open the serial port with DTR and RTS low
+(pyserial: `Serial()`, set `dtr = rts = False`, then `open()`), or the bridge resets the chip into download mode. After a crash the USB device can stop
+answering until it is reset (libusb `libusb_reset_device`) or the cable is replugged.
+
+To benchmark a set of clips and compare with the emulator and the host build: `python esp32/tools/board_bench.py --port <port> --model models/nemo8.tnm --lm models/nemo_lm.tlm --clips clips.json --out result.json`
+(run it with ESP-IDF's Python, which has pyserial; `PYTHON=` points the tools that need numpy and soundfile to another interpreter), then `tools/merge_board.py`.
 
 **In the emulator** (Espressif QEMU 9.x): runs the real firmware, then reports the transcript and instruction counts.
 
@@ -215,7 +268,8 @@ esp32/components/tinyasr/  on-chip engine: tasr_nemo.c (Conformer CTC/RNN-T), ke
                            (GRU LM + beam search), tasr_seg.c (VAD), tinyasr.c (streaming engine)
 esp32/firmware/            ESP-IDF app: live I2S microphone or benchmark mode, OLED, partition layouts
 esp32/host/                host build of the engine: tasr_cli, live_demo.py, seg_test, eval_engine.py, benchmark.py
-esp32/tools/               flash.sh, emulate.sh, run_qemu.sh, bench_latency.py, mkimages.py
+esp32/tools/               flash.sh, emulate.sh, run_qemu.sh, bench_latency.py, mkimages.py, board_bench.py (clips on a real board),
+                           summarize_board.py / merge_board.py, dual_bisect.py / dump_cmp.py (two-core debugging)
 train/                     PyTorch port of NVIDIA's model (nemo_small.py, rnnt_small.py), exporters, GRU LM training,
                            int4 QAT (train_nemo_qat.py), streaming + new-language fine-tuning (train_nemo_stream.py,
                            augment.py, filter_teacher.py, make_tok.py, prep_es.py)
@@ -230,7 +284,7 @@ models/                    nemo8.tnm (int8, 14.0 MB), nemo4.tnm (int4, 8.3 MB), 
 - English and Spanish only.
 - Utterance mode prints text after each utterance; streaming mode shows partial text but is less accurate (see above).
 - Very noisy crowds and reverberant rooms remain hard.
-- Speed is estimated until board measurements are published.
+- Speed: about twice slower than real time on one core today (see [Speed and memory](#speed-and-memory)); the two-core mode is not correct on silicon yet.
 - Requires an ESP32-S3 with 16 MB flash and 8 MB octal PSRAM (N16R8).
 
 ## License

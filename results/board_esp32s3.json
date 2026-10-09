@@ -1,0 +1,1007 @@
+{
+ "en_nemo8": {
+  "model": "nemo8.tnm",
+  "dual_core": false,
+  "clips": 27,
+  "audio_s": 214.8,
+  "rtf_mean": 1.969,
+  "rtf_min": 1.907,
+  "rtf_max": 2.02,
+  "wer_board": 7.14,
+  "wer_host": 7.14,
+  "wer_qemu": 7.14,
+  "min_free_psram": 1459528,
+  "min_free_internal": 125724,
+  "board_eq_qemu": "27/27",
+  "cycles_per_instruction": 2.03,
+  "board_eq_host": "22/27",
+  "per_clip": [
+   {
+    "audio": 7.0,
+    "rtf": 1.91,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.907,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.908,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.912,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.916,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.931,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation wood",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": true,
+    "eq_host": false
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.958,
+    "hyp": "don't it is such a noble ambition between that it is a pity it has such a shallow proination of the italian",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.911,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.908,
+    "hyp": "it is such an open ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.927,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow combination",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": true,
+    "eq_host": false
+   },
+   {
+    "audio": 10.6,
+    "rtf": 2.012,
+    "hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "ref": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 10.6,
+    "rtf": 2.016,
+    "hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "ref": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 10.6,
+    "rtf": 2.012,
+    "hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "ref": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 10.6,
+    "rtf": 2.015,
+    "hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "ref": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 10.6,
+    "rtf": 2.0,
+    "hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness than some against",
+    "ref": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "eq_qemu": true,
+    "eq_host": false
+   },
+   {
+    "audio": 10.6,
+    "rtf": 2.004,
+    "hyp": "in actual fact there are doubtless various factors that concur in giving us feeling a greater or less remoteness and some member of",
+    "ref": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 10.6,
+    "rtf": 2.002,
+    "hyp": "in actual fact there are doubtless various factors that concur by giving a spar or greater or less remote and some",
+    "ref": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "eq_qemu": true,
+    "eq_host": false
+   },
+   {
+    "audio": 10.6,
+    "rtf": 2.017,
+    "hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "ref": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 10.6,
+    "rtf": 2.02,
+    "hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "ref": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 10.6,
+    "rtf": 2.016,
+    "hyp": "in actual fact there are doubtless various factors that occur in giving us the feeling a greater or less remoteness and some remembered event",
+    "ref": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 6.23,
+    "rtf": 1.925,
+    "hyp": "no such authority was given for the course of peel whose registries remained closed",
+    "ref": "no such authority was given for the court of appeal whose registries remained closed",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 7.67,
+    "rtf": 1.921,
+    "hyp": "the performance was recorded and later released on a live album titled late orchestration",
+    "ref": "the performance was recorded and later released on a live album titled late orchestration",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 5.76,
+    "rtf": 1.92,
+    "hyp": "he has been locked up so long he has been mostly forgotten about",
+    "ref": "he has been locked up so long he has been mostly forgotten about",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 3.76,
+    "rtf": 1.958,
+    "hyp": "the qatari government and the football authorities must take notice",
+    "ref": "the qatari government and the football authorities must take notice",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 7.94,
+    "rtf": 2.007,
+    "hyp": "the court still sees scope for further improving the quality of spending by simply applying the current system to its full potential",
+    "ref": "the court still sees scope for further improving the quality of spending by simply applying the current system to its full potential",
+    "eq_qemu": true,
+    "eq_host": true
+   },
+   {
+    "audio": 3.57,
+    "rtf": 1.939,
+    "hyp": "so that indicates a t menu under that menu",
+    "ref": "so that indicates that there's an menu under that menu",
+    "eq_qemu": true,
+    "eq_host": false
+   },
+   {
+    "audio": 3.84,
+    "rtf": 1.908,
+    "hyp": "yeah i think of it in terms of you know not even maybe to what",
+    "ref": "yeah i think of it in terms of you know not even maybe to well",
+    "eq_qemu": true,
+    "eq_host": true
+   }
+  ],
+  "short_clips": [
+   {
+    "audio": 3.76,
+    "compute_s": 7.36,
+    "paced_final_s": null
+   },
+   {
+    "audio": 3.57,
+    "compute_s": 6.92,
+    "paced_final_s": null
+   },
+   {
+    "audio": 3.84,
+    "compute_s": 7.33,
+    "paced_final_s": null
+   }
+  ]
+ },
+ "en_nemo4": {
+  "model": "nemo4.tnm",
+  "dual_core": false,
+  "clips": 10,
+  "audio_s": 59.1,
+  "rtf_mean": 1.762,
+  "rtf_min": 1.734,
+  "rtf_max": 1.828,
+  "wer_board": 8.33,
+  "wer_host": 8.33,
+  "wer_qemu": null,
+  "min_free_psram": 1836176,
+  "min_free_internal": 128160,
+  "board_eq_host": "8/10",
+  "per_clip": [
+   {
+    "audio": 7.0,
+    "rtf": 1.742,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.764,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.755,
+    "hyp": "is such a no ambition it is a pity it has shallow con the italian",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": false
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.759,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow combination",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": false
+   },
+   {
+    "audio": 6.23,
+    "rtf": 1.76,
+    "hyp": "no such authority was given for the course of appeal whose registries remained closed",
+    "ref": "no such authority was given for the court of appeal whose registries remained closed",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 5.76,
+    "rtf": 1.734,
+    "hyp": "he has been locked up so long he has been mostly forgotten about",
+    "ref": "he has been locked up so long he has been mostly forgotten about",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 3.76,
+    "rtf": 1.771,
+    "hyp": "the qatari government and the football authorities must take notice",
+    "ref": "the qatari government and the football authorities must take notice",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.94,
+    "rtf": 1.828,
+    "hyp": "the court still sees scope for further improving the quality of spending by simply applying the current system to its full potential",
+    "ref": "the court still sees scope for further improving the quality of spending by simply applying the current system to its full potential",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 3.57,
+    "rtf": 1.743,
+    "hyp": "so that indicates that there are menu under that menu",
+    "ref": "so that indicates that there's an menu under that menu",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 3.84,
+    "rtf": 1.735,
+    "hyp": "yeah i think of it in terms of you know not even maybe to",
+    "ref": "yeah i think of it in terms of you know not even maybe to well",
+    "eq_qemu": null,
+    "eq_host": true
+   }
+  ],
+  "short_clips": [
+   {
+    "audio": 3.76,
+    "compute_s": 6.66,
+    "paced_final_s": null
+   },
+   {
+    "audio": 3.57,
+    "compute_s": 6.22,
+    "paced_final_s": null
+   },
+   {
+    "audio": 3.84,
+    "compute_s": 6.66,
+    "paced_final_s": null
+   }
+  ]
+ },
+ "en_stream": {
+  "model": "oido_stream.tnm",
+  "dual_core": false,
+  "clips": 12,
+  "audio_s": 90.3,
+  "rtf_mean": 2.042,
+  "rtf_min": 1.978,
+  "rtf_max": 2.111,
+  "wer_board": 6.79,
+  "wer_host": 6.79,
+  "wer_qemu": null,
+  "min_free_psram": 438572,
+  "min_free_internal": 73916,
+  "board_eq_host": "12/12",
+  "stream": {
+   "finish_s_mean": 1.12,
+   "finish_s_min": 0.78,
+   "finish_s_max": 1.65,
+   "rtf_mean": 1.958,
+   "wer_board_stream": 10.86,
+   "stream_eq_utterance": "5/12",
+   "stream_eq_host": "10/12",
+   "wer_host_stream": 11.76
+  },
+  "per_clip": [
+   {
+    "audio": 7.0,
+    "rtf": 1.978,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.986,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.983,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 2.008,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow prodation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.988,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow prodation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 10.6,
+    "rtf": 2.11,
+    "hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "ref": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 10.6,
+    "rtf": 2.111,
+    "hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness and some of the events",
+    "ref": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 10.6,
+    "rtf": 2.101,
+    "hyp": "in actual fact there are doubtless various factors that concur when giving us a fi of greater or less remoteness in some some la",
+    "ref": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 6.23,
+    "rtf": 2.0,
+    "hyp": "no such authority was given for the course of appeal whose registries remained closed",
+    "ref": "no such authority was given for the court of appeal whose registries remained closed",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 5.76,
+    "rtf": 1.995,
+    "hyp": "he has been locked up so long he has been mostly forgotten about",
+    "ref": "he has been locked up so long he has been mostly forgotten about",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.94,
+    "rtf": 2.088,
+    "hyp": "the court still sees for further improving the quality of spending by simply applying the current system to its full potential",
+    "ref": "the court still sees scope for further improving the quality of spending by simply applying the current system to its full potential",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 3.57,
+    "rtf": 2.021,
+    "hyp": "so that indicates that there and menu under that menu",
+    "ref": "so that indicates that there's an menu under that menu",
+    "eq_qemu": null,
+    "eq_host": true
+   }
+  ]
+ },
+ "es": {
+  "model": "oido_es.tnm",
+  "dual_core": false,
+  "clips": 12,
+  "audio_s": 102.8,
+  "rtf_mean": 2.06,
+  "rtf_min": 1.982,
+  "rtf_max": 2.134,
+  "wer_board": 9.27,
+  "wer_host": 7.32,
+  "wer_qemu": null,
+  "min_free_psram": 280988,
+  "min_free_internal": 73820,
+  "board_eq_host": "9/12",
+  "stream": {
+   "finish_s_mean": 1.33,
+   "finish_s_min": 0.64,
+   "finish_s_max": 1.65,
+   "rtf_mean": 1.968,
+   "wer_board_stream": 12.68,
+   "stream_eq_utterance": "3/12"
+  },
+  "per_clip": [
+   {
+    "audio": 6.24,
+    "rtf": 1.982,
+    "hyp": "las familias hebreas pasaban la mayor parte de su tiempo al aire libre",
+    "ref": "las familias hebreas pasaban la mayor parte de su tiempo al aire libre",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 9.54,
+    "rtf": 2.034,
+    "hyp": "en cuanto logra escapar de la corriente nada de regreso no será más complejo de lo habitual",
+    "ref": "en cuanto logre escapar de la corriente nadar de regreso no serán más complejo de lo habitual",
+    "eq_qemu": null,
+    "eq_host": false
+   },
+   {
+    "audio": 9.66,
+    "rtf": 2.063,
+    "hyp": "el satel en el espacio recibe la llamada y luego la refleja de vuelta casi de forma instantánea",
+    "ref": "el satélite en el espacio recibe la llamada y luego la refleja de vuelta casi de forma instantánea",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 8.58,
+    "rtf": 2.055,
+    "hyp": "pronunciar el italiano relativamente sencillo dado que la mayor parte de sus palabras suena igual a como se escriben",
+    "ref": "pronunciar el italiano es relativamente sencillo dado que la mayor parte de sus palabras suenan igual a como se escriben",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 9.72,
+    "rtf": 2.095,
+    "hyp": "según las autoridades policiales es poco probable que el conductor del vehículo que en vistió el fotógrafo sea procesado penalmente",
+    "ref": "según las autoridades policiales es poco probable que el conductor del vehículo que embistió al fotógrafo sea procesado penalmente",
+    "eq_qemu": null,
+    "eq_host": false
+   },
+   {
+    "audio": 10.92,
+    "rtf": 2.134,
+    "hyp": "el foco tanto en naturalistas como de filósofos fue puesto en las obras clásicas especialmente en la versión en latín del texto bíblico",
+    "ref": "el foco tanto de naturalistas como de filósofos fue puesto en las obras clásicas especialmente en la versión en latín del texto bíblico",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.32,
+    "rtf": 2.017,
+    "hyp": "aún intentan establecer cuán importante fue el impacto y de qué modo afectará al planeta",
+    "ref": "aún intentan establecer cuán importante fue el impacto y de qué modo afectará al planeta",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 8.7,
+    "rtf": 2.056,
+    "hyp": "casi todos los distritos cuentan con el servicio autobuses coaster japoneses los cuales son como y resistentes",
+    "ref": "casi todos los distritos cuentan con el servicio autobuses coaster japoneses los cuales son cómodos y resistentes",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 5.28,
+    "rtf": 1.999,
+    "hyp": "en cuatro años es el quinto sep de martel",
+    "ref": "en cuatro años es el quinto cep de martelly",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 9.96,
+    "rtf": 2.091,
+    "hyp": "normalmente un curso abarcará todos los temas que se han tratado aquí con mucho más detalles en general con experiencia práctica",
+    "ref": "normalmente un curso abarcará todos los temas que se han tratado aquí con mucho más detalle y en general con experiencia práctica",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.26,
+    "rtf": 2.005,
+    "hyp": "aún intentan establecer cuán importantes fue el impacto y de que modo afecta al planeta",
+    "ref": "aún intentan establecer cuán importante fue el impacto y de qué modo afectará al planeta",
+    "eq_qemu": null,
+    "eq_host": false
+   },
+   {
+    "audio": 9.6,
+    "rtf": 2.098,
+    "hyp": "estas cuestiones se han vuelto a disciplinas separadas enfocadas en ofrecer soluciones a problemas de la vida real",
+    "ref": "estas cuestiones se han vuelto disciplinas separadas enfocadas en ofrecer soluciones a problemas de la vida real",
+    "eq_qemu": null,
+    "eq_host": true
+   }
+  ]
+ },
+ "en_rnnt8": {
+  "model": "rnnt8.tnm",
+  "dual_core": false,
+  "clips": 10,
+  "audio_s": 70.0,
+  "rtf_mean": 1.885,
+  "rtf_min": 1.877,
+  "rtf_max": 1.907,
+  "wer_board": 6.67,
+  "wer_host": 6.67,
+  "wer_qemu": null,
+  "min_free_psram": 1542416,
+  "min_free_internal": 136452,
+  "board_eq_host": "10/10",
+  "per_clip": [
+   {
+    "audio": 7.0,
+    "rtf": 1.882,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.879,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.879,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.882,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.877,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.887,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation would be",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.907,
+    "hyp": "don't you such a notable ambition between that it is a pity it has usually such artfully shallow the ordination of",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.879,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.881,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.893,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow abomination",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": true
+   }
+  ]
+ },
+ "en_stream_paced": {
+  "model": "oido_stream.tnm",
+  "dual_core": false,
+  "clips": 6,
+  "audio_s": 38.2,
+  "rtf_mean": 2.027,
+  "rtf_min": 1.978,
+  "rtf_max": 2.11,
+  "wer_board": 3.19,
+  "wer_host": null,
+  "wer_qemu": null,
+  "min_free_psram": 846236,
+  "min_free_internal": 73820,
+  "stream": {
+   "finish_s_mean": 1.35,
+   "finish_s_min": 0.91,
+   "finish_s_max": 1.78,
+   "rtf_mean": 1.945,
+   "wer_board_stream": 6.38,
+   "stream_eq_utterance": "3/6"
+  },
+  "paced": {
+   "clips": 6,
+   "final_text_after_speech_s_mean": 6.72,
+   "min": 4.08,
+   "max": 11.09,
+   "wer_board_paced": 6.38,
+   "per_clip": [
+    {
+     "audio": 7.0,
+     "final_s": 7.21
+    },
+    {
+     "audio": 7.0,
+     "final_s": 7.31
+    },
+    {
+     "audio": 10.6,
+     "final_s": 11.09
+    },
+    {
+     "audio": 6.23,
+     "final_s": 6.43
+    },
+    {
+     "audio": 3.76,
+     "final_s": 4.22
+    },
+    {
+     "audio": 3.57,
+     "final_s": 4.08
+    }
+   ]
+  },
+  "per_clip": [
+   {
+    "audio": 7.0,
+    "rtf": 1.978,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": null
+   },
+   {
+    "audio": 7.0,
+    "rtf": 1.983,
+    "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+    "eq_qemu": null,
+    "eq_host": null
+   },
+   {
+    "audio": 10.6,
+    "rtf": 2.11,
+    "hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "ref": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+    "eq_qemu": null,
+    "eq_host": null
+   },
+   {
+    "audio": 6.23,
+    "rtf": 2.0,
+    "hyp": "no such authority was given for the course of appeal whose registries remained closed",
+    "ref": "no such authority was given for the court of appeal whose registries remained closed",
+    "eq_qemu": null,
+    "eq_host": null
+   },
+   {
+    "audio": 3.76,
+    "rtf": 2.013,
+    "hyp": "the qatari government and the football authorities must take notice",
+    "ref": "the qatari government and the football authorities must take notice",
+    "eq_qemu": null,
+    "eq_host": null
+   },
+   {
+    "audio": 3.57,
+    "rtf": 2.02,
+    "hyp": "so that indicates that there and menu under that menu",
+    "ref": "so that indicates that there's an menu under that menu",
+    "eq_qemu": null,
+    "eq_host": null
+   }
+  ],
+  "short_clips": [
+   {
+    "audio": 3.76,
+    "compute_s": 7.57,
+    "paced_final_s": 4.22
+   },
+   {
+    "audio": 3.57,
+    "compute_s": 7.21,
+    "paced_final_s": 4.08
+   }
+  ],
+  "same_clips_compute_s": {
+   "stream_model_utterance": [
+    13.85,
+    13.88,
+    22.36,
+    12.46,
+    7.57,
+    7.21
+   ],
+   "original_nemo8_utterance": [
+    13.37,
+    13.51,
+    21.33,
+    11.99,
+    7.36,
+    6.92
+   ]
+  }
+ },
+ "es_paced": {
+  "model": "oido_es.tnm",
+  "dual_core": false,
+  "clips": 4,
+  "audio_s": 30.9,
+  "rtf_mean": 2.046,
+  "rtf_min": 1.982,
+  "rtf_max": 2.095,
+  "wer_board": 10.17,
+  "wer_host": 8.47,
+  "wer_qemu": null,
+  "min_free_psram": 270404,
+  "min_free_internal": 73820,
+  "board_eq_host": "3/4",
+  "stream": {
+   "finish_s_mean": 1.21,
+   "finish_s_min": 0.64,
+   "finish_s_max": 1.65,
+   "rtf_mean": 1.96,
+   "wer_board_stream": 15.25,
+   "stream_eq_utterance": "2/4"
+  },
+  "paced": {
+   "clips": 4,
+   "final_text_after_speech_s_mean": 8.13,
+   "min": 5.69,
+   "max": 10.61,
+   "wer_board_paced": 15.25,
+   "per_clip": [
+    {
+     "audio": 6.24,
+     "final_s": 6.34
+    },
+    {
+     "audio": 9.66,
+     "final_s": 9.87
+    },
+    {
+     "audio": 9.72,
+     "final_s": 10.61
+    },
+    {
+     "audio": 5.28,
+     "final_s": 5.69
+    }
+   ]
+  },
+  "per_clip": [
+   {
+    "audio": 6.24,
+    "rtf": 1.982,
+    "hyp": "las familias hebreas pasaban la mayor parte de su tiempo al aire libre",
+    "ref": "las familias hebreas pasaban la mayor parte de su tiempo al aire libre",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 9.66,
+    "rtf": 2.063,
+    "hyp": "el satel en el espacio recibe la llamada y luego la refleja de vuelta casi de forma instantánea",
+    "ref": "el satélite en el espacio recibe la llamada y luego la refleja de vuelta casi de forma instantánea",
+    "eq_qemu": null,
+    "eq_host": true
+   },
+   {
+    "audio": 9.72,
+    "rtf": 2.095,
+    "hyp": "según las autoridades policiales es poco probable que el conductor del vehículo que en vistió el fotógrafo sea procesado penalmente",
+    "ref": "según las autoridades policiales es poco probable que el conductor del vehículo que embistió al fotógrafo sea procesado penalmente",
+    "eq_qemu": null,
+    "eq_host": false
+   },
+   {
+    "audio": 5.28,
+    "rtf": 1.999,
+    "hyp": "en cuatro años es el quinto sep de martel",
+    "ref": "en cuatro años es el quinto cep de martelly",
+    "eq_qemu": null,
+    "eq_host": true
+   }
+  ],
+  "short_clips": []
+ },
+ "profile": {
+  "stages": [
+   {
+    "stage": "log-mel",
+    "emulator_Minstr_per_s": 9.7,
+    "board_Mcycles_per_s": 14.3,
+    "cycles_per_instruction": 1.48
+   },
+   {
+    "stage": "conv0",
+    "emulator_Minstr_per_s": 14.2,
+    "board_Mcycles_per_s": 20.5,
+    "cycles_per_instruction": 1.45
+   },
+   {
+    "stage": "im2col",
+    "emulator_Minstr_per_s": 5.6,
+    "board_Mcycles_per_s": 20.4,
+    "cycles_per_instruction": 3.66
+   },
+   {
+    "stage": "matrix products",
+    "emulator_Minstr_per_s": 103.4,
+    "board_Mcycles_per_s": 215.9,
+    "cycles_per_instruction": 2.09
+   },
+   {
+    "stage": "layernorm",
+    "emulator_Minstr_per_s": 7.0,
+    "board_Mcycles_per_s": 14.6,
+    "cycles_per_instruction": 2.07
+   },
+   {
+    "stage": "activation quant",
+    "emulator_Minstr_per_s": 14.8,
+    "board_Mcycles_per_s": 32.0,
+    "cycles_per_instruction": 2.16
+   },
+   {
+    "stage": "SiLU / GLU",
+    "emulator_Minstr_per_s": 10.6,
+    "board_Mcycles_per_s": 24.7,
+    "cycles_per_instruction": 2.35
+   },
+   {
+    "stage": "q/k/v int8",
+    "emulator_Minstr_per_s": 6.4,
+    "board_Mcycles_per_s": 13.0,
+    "cycles_per_instruction": 2.04
+   },
+   {
+    "stage": "pos. enc.",
+    "emulator_Minstr_per_s": 3.0,
+    "board_Mcycles_per_s": 6.0,
+    "cycles_per_instruction": 2.03
+   },
+   {
+    "stage": "attention",
+    "emulator_Minstr_per_s": 33.8,
+    "board_Mcycles_per_s": 44.1,
+    "cycles_per_instruction": 1.3
+   },
+   {
+    "stage": "depthwise conv",
+    "emulator_Minstr_per_s": 10.5,
+    "board_Mcycles_per_s": 14.8,
+    "cycles_per_instruction": 1.4
+   },
+   {
+    "stage": "head + beam search with LM",
+    "emulator_Minstr_per_s": 21.1,
+    "board_Mcycles_per_s": 40.2,
+    "cycles_per_instruction": 1.9
+   }
+  ],
+  "board_total_Mcycles_per_s": 460.6,
+  "emulator_total_Minstr_per_s": 240.1,
+  "cycles_per_instruction": 1.92,
+  "audio_s": 214.8
+ }
+}

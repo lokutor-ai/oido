@@ -6,3 +6,6 @@ target_compile_options(${COMPONENT_LIB} PRIVATE -O2 -ffp-contract=off -Wno-unuse
 if(DEFINED ENV{TASR_DEBUG_SUMS})
     target_compile_definitions(${COMPONENT_LIB} PRIVATE TASR_DEBUG_SUMS)
 endif()
+if(DEFINED ENV{TASR_DEBUG_DUMP})
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE TASR_DEBUG_DUMP)
+endif()

@@ -27,11 +27,13 @@ case "$MODEL" in
 esac
 [ "$MODE" = mic ] && CFG="$CFG;sdkconfig.mic"
 SUF=""; [ -n "$TASR_OLED" ] && CFG="$CFG;sdkconfig.oled" && SUF=_oled
+[ -n "$TASR_PACED" ] && CFG="$CFG;sdkconfig.paced" && SUF=${SUF}_paced   # file mode: also stream at real-time pace, report the final-text delay
 [ -n "$TASR_DUAL" ] && SUF=${SUF}_2c
 B=build_${LAYOUT}_${MODE}${SUF}
 (cd firmware && idf.py -B $B -D SDKCONFIG=sdkconfig_${LAYOUT}_${MODE}${SUF} -D SDKCONFIG_DEFAULTS="$CFG" -D TASR_2C=${TASR_DUAL:-0} build)
 OUT=build_images/${LAYOUT}_${MODE}; mkdir -p $OUT
 LMARG=""; [ -n "$LM" ] && LMARG="--lm $LM"
 "$PY" tools/mkimages.py "$MODEL" $OUT --layout $LAYOUT --wavs "${WAVS[@]}" --refs "${REFS[@]}" $LMARG --merge firmware/$B --flash_mode keep
-esptool.py --chip esp32s3 -p "$PORT" -b 921600 write_flash 0x0 $OUT/flash.bin
+AFTER=hard_reset; case "$PORT" in *usbmodem*|*ttyACM*) AFTER=watchdog_reset ;; esac   # native USB: an RTS reset lands in download mode
+esptool.py --chip esp32s3 -p "$PORT" -b 921600 --after $AFTER write_flash 0x0 $OUT/flash.bin
 echo "flashed ($LAYOUT, $MODE). monitor: (cd firmware && idf.py -B $B -p $PORT monitor)"

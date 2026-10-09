@@ -254,8 +254,36 @@ static void ndbg(const char *what, int i, const float *x, size_t n)
     for (size_t k = 0; k < n; k++) { uint32_t b; memcpy(&b, &x[k], 4); h = (h ^ b) * 16777619u; }
     printf("DBG %s %d %08x\n", what, i, (unsigned)h);
 }
+static void ndbg8(const char *what, int i, const int8_t *x, int rows, int stride, int kp)
+{
+    uint32_t h = 2166136261u;
+    for (int r = 0; r < rows; r++)
+        for (int k = 0; k < kp; k++) h = (h ^ (uint8_t)x[(size_t)r * stride + k]) * 16777619u;
+    printf("DBG %s %d %08x\n", what, i, (unsigned)h);
+}
+#ifdef TASR_DEBUG_DUMP  // print every word of a tensor ("DUMP name layer row hex hex ..."), to find which elements a bug corrupts
+static void ndump(const char *what, int i, const float *x, int rows, int cols)
+{
+    for (int r = 0; r < rows; r++) {
+        printf("DUMP %s %d %d", what, i, r);
+        for (int c = 0; c < cols; c++) { uint32_t b; memcpy(&b, &x[(size_t)r * cols + c], 4); printf(" %x", (unsigned)b); }
+        printf("\n");
+    }
+}
+#else
+#define ndump(what, i, x, rows, cols)
+#endif
 #else
 #define ndbg(what, i, x, n)
+#define ndbg8(what, i, x, rows, stride, kp)
+#define ndump(what, i, x, rows, cols)
+#endif
+
+// Experiment: CONFIG_TASR_PAR_MASK selects which call sites of the utterance path really use both cores (bit = site id)
+#ifdef CONFIG_TASR_PAR_MASK
+#define NPAR(site, fn, ctx, n) do { if (CONFIG_TASR_PAR_MASK & (1u << (site))) tasr_parallel(fn, ctx, n); else fn(ctx, 0, n, 0); } while (0)
+#else
+#define NPAR(site, fn, ctx, n) tasr_parallel(fn, ctx, n)
 #endif
 
 // ------------------------------------------------------------------ helpers
@@ -315,6 +343,7 @@ typedef struct {
     int T;                       // encoder frames
     int ldq;
     int8_t *xq;                  // [RB][ldq]
+    int8_t *xq1;                 // experiment: private copy of the activation tile for worker 1
     float *xs;                   // [RB]
     int8_t *wtmp[NW];
     int32_t *acc[NW];
@@ -340,14 +369,37 @@ static void ngemm_job(void *p, int b, int e, int w)
 {
     ngemm_t *j = (ngemm_t *)p;
     const int u = j->L->blocked ? 16 : 1;
-    tasr_qlin_range(j->L, j->c->xq, j->c->xs, j->T, j->c->ldq, j->y, j->ldy, j->c->wtmp[w], j->c->acc[w], b * u, e * u);
+    const int8_t *xq = j->c->xq;
+#ifdef CONFIG_TASR_EXP_XQ_COPY
+    if (w == 1 && j->c->xq1 && !j->L->blocked && j->L->kp > 256 && j->L->kp <= 1024) {
+        memcpy(j->c->xq1, xq, (size_t)j->T * j->c->ldq);   // the two cores then never read the same activation addresses
+        xq = j->c->xq1;
+    }
+#endif
+    tasr_qlin_range(j->L, xq, j->c->xs, j->T, j->c->ldq, j->y, j->ldy, j->c->wtmp[w], j->c->acc[w], b * u, e * u);
 }
+#ifdef CONFIG_TASR_EXP_ROWSPLIT
+// experiment: split the K=704 products by rows of the tile instead of by output channels
+static void ngemm_rows_job(void *p, int b, int e, int w)
+{
+    ngemm_t *j = (ngemm_t *)p;
+    tasr_qlin_range(j->L, j->c->xq + (size_t)b * j->c->ldq, j->c->xs + b, e - b, j->c->ldq, j->y + (size_t)b * j->ldy, j->ldy,
+                    j->c->wtmp[w], j->c->acc[w], 0, j->L->n);
+}
+#endif
 // y[t][:] = L(x[t][:]) for T <= RB rows (x rows already quantized into c->xq / c->xs)
 static void nqlin(nctx_t *c, const tasr_qlin_t *L, int T, float *y, int ldy)
 {
     NB(t0);
     ngemm_t j = {c, L, T, y, ldy};
-    tasr_parallel(ngemm_job, &j, L->blocked ? L->n / 16 : L->n);
+#ifdef CONFIG_TASR_EXP_ROWSPLIT
+    if (!L->blocked && L->bits == 8 && L->kp > 256 && L->kp <= 1024) {
+        tasr_parallel(ngemm_rows_job, &j, T);
+        NE(t0, L->kp > 1024 ? N_CONV2 : L->kp > 256 ? N_SUB : N_GEMM);
+        return;
+    }
+#endif
+    NPAR(L->blocked ? 11 : (L->bits == 8 && L->kp <= 256) ? 3 : L->kp > 1024 ? 10 : 9, ngemm_job, &j, L->blocked ? L->n / 16 : L->n);
     NE(t0, L->kp > 1024 ? N_CONV2 : L->kp > 256 ? N_SUB : N_GEMM);  // front-end GEMMs / long-K layers / K <= 256
 }
 static void nq_job(void *p, int b, int e, int w);
@@ -356,7 +408,7 @@ static void nquant(nctx_t *c, const float *x, int T, int K, int ldx, int kp)
     NB(t0);
     typedef struct { const float *x; int K, ldx, kp; nctx_t *c; } nqj2_t;
     nqj2_t j = {x, K, ldx, kp, c};
-    tasr_parallel(nq_job, &j, T);
+    NPAR(4, nq_job, &j, T);
     NE(t0, N_QUANT);
 }
 
@@ -540,7 +592,7 @@ static float *nemo_features(const tasr_nemo_t *m, const int16_t *pcm, int n, int
     const int nvalid = n / HOP, T = nvalid + 1;
     float *F = (float *)tasr_alloc(sizeof(float) * (size_t)T * NMEL, 0);
     nfeat_t fj = {m, pcm, n, F};
-    tasr_parallel(nfeat_job, &fj, T);
+    NPAR(0, nfeat_job, &fj, T);
     ndbg("twre", 0, m->tw_re, 256);
     ndbg("twim", 0, m->tw_im, 256);
     ndbg("logmel", 0, F, (size_t)T * NMEL);
@@ -657,7 +709,7 @@ static void nln_rows(const float *x, int T, int d, nln_t p, float *y)
 {
     NB(t0);
     nlnj_t j = {x, y, d, d, d, p};
-    tasr_parallel(nln_job, &j, T);
+    NPAR(1, nln_job, &j, T);
     NE(t0, N_LN);
 }
 static void nsilu_job(void *p, int b, int e, int w)
@@ -669,7 +721,7 @@ static void nsilu_job(void *p, int b, int e, int w)
 static void nsilu(float *x, int n)
 {
     NB(t0);
-    tasr_parallel(nsilu_job, x, n);
+    NPAR(2, nsilu_job, x, n);
     NE(t0, N_ACT);
 }
 typedef struct {
@@ -792,7 +844,14 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
     memset(&C, 0, sizeof(C));
     C.m = m; C.T = T;
     C.ldq = m->ff > 2 * d ? m->ff : 2 * d;   // layer activations (K <= ff)
+#ifdef CONFIG_TASR_EXP_XQ_PSRAM
+    C.xq = (int8_t *)tasr_alloc((size_t)RB * C.ldq, 0);
+#else
     C.xq = (int8_t *)tasr_alloc((size_t)RB * C.ldq, 1);
+#endif
+#ifdef CONFIG_TASR_EXP_XQ_COPY
+    C.xq1 = (int8_t *)tasr_alloc((size_t)RB * C.ldq, 1);
+#endif
     C.xs = (float *)tasr_alloc(sizeof(float) * RB, 1);
     int8_t *xq_sub = (int8_t *)tasr_alloc((size_t)RB * m->sub.kp, 0);   // front-end projection rows (K = 3520)
     for (int w = 0; w < NW; w++) {
@@ -828,7 +887,7 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
                 }
                 nc0_t j = {m, (const float(*)[NMEL + 2])P, ring + (size_t)(r % 3) * sc * (f1 + 2), cmw};
                 memset(cmw, 0, sizeof(float) * NW * (f1 + 2));  // a worker that gets no channels leaves zeros
-                tasr_parallel(nc0_job, &j, sc);
+                NPAR(5, nc0_job, &j, sc);
                 {
                     float *cm = cmaxr + (size_t)(r % 3) * (f1 + 2);
                     for (int f = 0; f < f1 + 2; f++) {
@@ -851,7 +910,7 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
                     j.rows[dt] = (r >= 0 && r < T1) ? ring + (size_t)(r % 3) * sc * (f1 + 2) : NULL;
                     j.cmax[dt] = cmaxr + (size_t)((r + 3) % 3) * (f1 + 2);
                 }
-                tasr_parallel(nim_job, &j, f2);
+                NPAR(6, nim_job, &j, f2);
             }
             NE(tim, N_IM2COL);
             if (++nbat < C2B && t2 < T - 1) continue;
@@ -956,13 +1015,21 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
         for (int t0 = 0; t0 < T; t0 += RB) {
             const int tn = T - t0 < RB ? T - t0 : RB;
             nln_rows(x + (size_t)t0 * d, tn, d, L->n_ff1, hb);
+            if (t0 == 0) ndbg("f1ln", li, hb, (size_t)tn * d);
             nquant(&C, hb, tn, d, d, L->ff1_1.kp);
+            if (t0 == 0) ndbg8("f1q", li, C.xq, tn, C.ldq, L->ff1_1.kp);
             nqlin(&C, &L->ff1_1, tn, h2, m->ff);
+            if (t0 == 0) ndbg("f1a", li, h2, (size_t)tn * m->ff);
             nsilu(h2, tn * m->ff);
+            if (t0 == 0) ndbg("f1s", li, h2, (size_t)tn * m->ff);
             nquant(&C, h2, tn, m->ff, m->ff, L->ff1_2.kp);
+            if (t0 == 0) ndbg8("f1q2", li, C.xq, tn, C.ldq, L->ff1_2.kp);
             nqlin(&C, &L->ff1_2, tn, hb, d);
+            if (t0 == 0) ndbg("f1b", li, hb, (size_t)tn * d);
+            if (t0 == 0 && li == 1) ndump("f1b", li, hb, tn, d);
             for (int i = 0; i < tn * d; i++) x[(size_t)t0 * d + i] += 0.5f * hb[i];
         }
+        ndbg("ff1", li, x, (size_t)T * d);
         // MHSA: q/k/v for all frames (int8 per head), positional rows, then attention per head
         for (int t0 = 0; t0 < T; t0 += RB) {
             const int tn = T - t0 < RB ? T - t0 : RB;
@@ -1010,7 +1077,7 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
         {
             NB(ta);
             natt_t aj = {&C};
-            tasr_parallel(natt_job, &aj, H);
+            NPAR(7, natt_job, &aj, H);
             NE(ta, N_ATT);
         }
         for (int t0 = 0; t0 < T; t0 += RB) {
@@ -1019,6 +1086,7 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
             nqlin(&C, &L->out, tn, hb, d);
             for (int i = 0; i < tn * d; i++) x[(size_t)t0 * d + i] += hb[i];
         }
+        ndbg("att", li, x, (size_t)T * d);
         // conv module: LN -> pw1 -> GLU (all frames) -> dw k=31 (+BN) -> swish -> pw2
         for (int t0 = 0; t0 < T; t0 += RB) {
             const int tn = T - t0 < RB ? T - t0 : RB;
@@ -1034,7 +1102,7 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
         {
             NB(td);
             ndw_t j = {glb, cv, L, T, d, m->k};
-            tasr_parallel(ndw_job, &j, T);
+            NPAR(8, ndw_job, &j, T);
             NE(td, N_DW);
         }
         for (int t0 = 0; t0 < T; t0 += RB) {
@@ -1043,6 +1111,7 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
             nqlin(&C, &L->pw2, tn, hb, d);
             for (int i = 0; i < tn * d; i++) x[(size_t)t0 * d + i] += hb[i];
         }
+        ndbg("cnv", li, x, (size_t)T * d);
         // FF2 (half step) + final LN
         for (int t0 = 0; t0 < T; t0 += RB) {
             const int tn = T - t0 < RB ? T - t0 : RB;

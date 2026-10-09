@@ -24,6 +24,47 @@ static struct {
     int b, e;
 } g_job;
 static SemaphoreHandle_t g_start, g_done;
+#ifdef CONFIG_TASR_EXP_SPIN_PARFOR
+// experiment: no task is ever blocked or switched while a job is running; the second core spins until the next job
+static volatile uint32_t g_seq_go, g_seq_done;
+static void worker_task(void *arg)
+{
+    (void)arg;
+    uint32_t seen = 0;
+    for (;;) {
+        while (g_seq_go == seen) { }
+        seen = g_seq_go;
+        __sync_synchronize();
+#ifdef CONFIG_TASR_EXP_NOINT
+        const unsigned ps = portSET_INTERRUPT_MASK_FROM_ISR();
+#endif
+        g_job.fn(g_job.ctx, g_job.b, g_job.e, 1);
+#ifdef CONFIG_TASR_EXP_NOINT
+        portCLEAR_INTERRUPT_MASK_FROM_ISR(ps);
+#endif
+        __sync_synchronize();
+        g_seq_done = seen;
+    }
+}
+static void par_for(tasr_job_fn fn, void *ctx, int n)
+{
+    if (n < 2) { fn(ctx, 0, n, 0); return; }
+    int mid = n / 2;
+    g_job.fn = fn; g_job.ctx = ctx; g_job.b = mid; g_job.e = n;
+    const uint32_t s = g_seq_go + 1;
+    __sync_synchronize();
+    g_seq_go = s;
+#ifdef CONFIG_TASR_EXP_NOINT
+    const unsigned ps = portSET_INTERRUPT_MASK_FROM_ISR();
+#endif
+    fn(ctx, 0, mid, 0);
+#ifdef CONFIG_TASR_EXP_NOINT
+    portCLEAR_INTERRUPT_MASK_FROM_ISR(ps);
+#endif
+    while (g_seq_done != s) { }
+    __sync_synchronize();
+}
+#else
 static void worker_task(void *arg)
 {
     (void)arg;
@@ -42,6 +83,7 @@ static void par_for(tasr_job_fn fn, void *ctx, int n)
     fn(ctx, 0, mid, 0);
     xSemaphoreTake(g_done, portMAX_DELAY);
 }
+#endif
 #define CPU_HZ 240000000.0
 
 #define INTERNAL_RESERVE (72 * 1024)  // keep internal RAM for I2S DMA, Wi-Fi/BLE stacks, task stacks
@@ -107,6 +149,9 @@ static void run_nemo(const uint8_t *blob, uint32_t blob_size)
     const int streaming = tasr_nemo_stream_supported(m);
     // a streaming model also keeps its attention / conv caches and positional rows (~2 MB at chunk 16, left 128)
     size_t budget = free_ps > reserve + (streaming ? 2200000 : 0) ? free_ps - reserve - (streaming ? 2200000 : 0) : 0;
+#ifdef CONFIG_TASR_EXP_NO_PSRAM_WEIGHTS
+    budget = 0;
+#endif
     size_t moved = tasr_nemo_place_weights(m, budget);
     ESP_LOGI(TAG, "NeMo conformer-ctc-small: %u weight bytes, %u moved to PSRAM | free PSRAM %u internal %u",
              (unsigned)tasr_nemo_weight_bytes(m), (unsigned)moved, (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
@@ -121,7 +166,7 @@ static void run_nemo(const uint8_t *blob, uint32_t blob_size)
     uint32_t n_utt;
     memcpy(&n_utt, aud + 4, 4);
     const uint8_t *p = aud + 8;
-    double tot_audio = 0, tot_cycles = 0, tot_fin = 0;
+    double tot_audio = 0, tot_cycles = 0, tot_fin = 0, tot_wall = 0, tot_fin_wall = 0;
     static char text[4096];
     tasr_nemo_stream_t *st = streaming ? tasr_nemo_stream_new(m, 0, 0, dec) : NULL;
     if (streaming) printf("STREAM model: chunk/left defaults, stream %s\n", st ? "ok" : "ALLOCATION FAILED");
@@ -132,27 +177,53 @@ static void run_nemo(const uint8_t *blob, uint32_t blob_size)
         const int16_t *pcm = (const int16_t *)(p + 8 + ((tl + 3) & ~3u));
         p = (const uint8_t *)(pcm + ns + (ns & 1));
         uint32_t c0 = esp_cpu_get_cycle_count();
+        int64_t w0 = esp_timer_get_time();
         tasr_nemo_transcribe(m, pcm, ns, dec, text, sizeof(text), NULL, 0, NULL);
+        const int64_t wall = esp_timer_get_time() - w0;  // 64-bit microseconds: the 32-bit cycle counter wraps every 17.9 s at 240 MHz
         uint32_t cyc = esp_cpu_get_cycle_count() - c0;
         double sec = ns / 16000.0;
         tot_audio += sec;
         tot_cycles += cyc;
-        printf("UTT %u | audio %.2fs | cycles %u | RTF %.3f\nREF: %.*s\nHYP: %s\n", (unsigned)u, sec, (unsigned)cyc,
-               cyc / CPU_HZ / sec, (int)tl, ref, text);
+        tot_wall += wall;
+        printf("UTT %u | audio %.2fs | cycles %u | RTF %.3f | wall %lld us | RTF_wall %.3f\nREF: %.*s\nHYP: %s\n", (unsigned)u, sec,
+               (unsigned)cyc, cyc / CPU_HZ / sec, (long long)wall, wall / 1e6 / sec, (int)tl, ref, text);
         if (st) {  // the same audio arriving in 20 ms blocks; what matters is the compute left after the last block
             tasr_nemo_stream_reset(st);
             uint32_t s0 = esp_cpu_get_cycle_count();
+            int64_t sw0 = esp_timer_get_time();
             for (uint32_t o = 0; o < ns; o += 320) tasr_nemo_stream_feed(st, pcm + o, ns - o < 320 ? ns - o : 320);
             uint32_t s1 = esp_cpu_get_cycle_count();
+            int64_t sw1 = esp_timer_get_time();
             tasr_nemo_stream_finish(st, text, sizeof(text));
             uint32_t s2 = esp_cpu_get_cycle_count();
+            int64_t sw2 = esp_timer_get_time();
             tot_fin += s2 - s1;
-            printf("STREAM %u | feed cycles %u | finish cycles %u (%.0f ms @240MHz) | RTF %.3f\nSHYP: %s\n", (unsigned)u,
-                   (unsigned)(s1 - s0), (unsigned)(s2 - s1), (s2 - s1) / CPU_HZ * 1000.0, (s2 - s0) / CPU_HZ / sec, text);
+            tot_fin_wall += sw2 - sw1;
+            printf("STREAM %u | feed cycles %u | finish cycles %u (%.0f ms @240MHz) | RTF %.3f | feed wall %lld us | finish wall %lld us | RTF_wall %.3f\nSHYP: %s\n",
+                   (unsigned)u, (unsigned)(s1 - s0), (unsigned)(s2 - s1), (s2 - s1) / CPU_HZ * 1000.0, (s2 - s0) / CPU_HZ / sec,
+                   (long long)(sw1 - sw0), (long long)(sw2 - sw1), (sw2 - sw0) / 1e6 / sec, text);
+#ifdef CONFIG_TASR_BENCH_PACED
+            tasr_nemo_stream_reset(st);
+            const int64_t p0 = esp_timer_get_time();
+            for (uint32_t o = 0; o < ns; o += 320) {
+                const uint32_t nb = ns - o < 320 ? ns - o : 320;
+                const int64_t due = p0 + (int64_t)(o + nb) * 1000000 / 16000;  // a block is complete when its last sample has been spoken
+                for (int64_t now = esp_timer_get_time(); now < due; now = esp_timer_get_time())
+                    if (due - now > 12000) vTaskDelay(1);
+                tasr_nemo_stream_feed(st, pcm + o, nb);
+            }
+            const int64_t p1 = esp_timer_get_time();
+            tasr_nemo_stream_finish(st, text, sizeof(text));
+            const int64_t p2 = esp_timer_get_time();
+            const int64_t eos = (int64_t)ns * 1000000 / 16000;  // end of speech, relative to p0
+            printf("PACED %u | audio %.2fs | last block fed %lld ms after the end of speech | final text %lld ms after the end of speech\nPHYP: %s\n",
+                   (unsigned)u, sec, (long long)((p1 - p0 - eos) / 1000), (long long)((p2 - p0 - eos) / 1000), text);
+#endif
         }
     }
-    if (st) printf("STREAM mean finish %.0f ms @240MHz\n", tot_fin / n_utt / CPU_HZ * 1000.0);
-    printf("TOTAL audio %.1fs cycles %.0f RTF@240MHz %.3f\n", tot_audio, tot_cycles, tot_cycles / CPU_HZ / tot_audio);
+    if (st) printf("STREAM mean finish %.0f ms @240MHz, %.0f ms wall\n", tot_fin / n_utt / CPU_HZ * 1000.0, tot_fin_wall / n_utt / 1e3);
+    printf("TOTAL audio %.1fs cycles %.0f RTF@240MHz %.3f wall RTF %.3f\n", tot_audio, tot_cycles, tot_cycles / CPU_HZ / tot_audio,
+           tot_wall / 1e6 / tot_audio);
     printf("MEM min free PSRAM %u internal %u\n", (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM),
            (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL));
     for (int i = 0; tasr_nemo_profile_name(i); i++)

@@ -13,10 +13,9 @@
   "host_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
   "chip_match": true,
   "wer": 0.0,
-  "t": [
-   5.344139283333334,
-   6.448263733333334
-  ]
+  "emu_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+  "board_s": 13.36999,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -32,10 +31,9 @@
   "host_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
   "chip_match": true,
   "wer": 0.0,
-  "t": [
-   5.336677960416667,
-   6.439080566666667
-  ]
+  "emu_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+  "board_s": 13.349798,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -51,10 +49,9 @@
   "host_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
   "chip_match": true,
   "wer": 0.0,
-  "t": [
-   5.329020310416667,
-   6.429655766666667
-  ]
+  "emu_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+  "board_s": 13.354864,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -70,10 +67,9 @@
   "host_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
   "chip_match": true,
   "wer": 0.0,
-  "t": [
-   5.347723667708334,
-   6.452675283333334
-  ]
+  "emu_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+  "board_s": 13.384684,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -89,10 +85,9 @@
   "host_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
   "chip_match": true,
   "wer": 0.0,
-  "t": [
-   5.346985430208334,
-   6.451766683333334
-  ]
+  "emu_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+  "board_s": 13.409873,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -102,16 +97,15 @@
   "desc": "four other talkers",
   "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
   "dur": 6.995,
-  "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation would",
+  "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation wood",
   "mp3": "samples/rooms_05.mp3",
   "instr": 1612170850,
   "host_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation would",
-  "chip_match": true,
+  "chip_match": false,
   "wer": 5.555555555555555,
-  "t": [
-   5.362525657291667,
-   6.470893116666668
-  ]
+  "emu_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation would",
+  "board_s": 13.514842,
+  "emu_match": false
  },
  {
   "group": "rooms",
@@ -124,13 +118,12 @@
   "hyp": "don't it is such a noble ambition between that it is a pity it has such a shallow proination of the italian",
   "mp3": "samples/rooms_06.mp3",
   "instr": 1625777650,
-  "host_hyp": "don't it is such a noble ambition between that it is a pity it has such a shallow doination of the italian",
-  "chip_match": false,
+  "host_hyp": "don't it is such a noble ambition between that it is a pity it has such a shallow proination of the italian",
+  "chip_match": true,
   "wer": 38.88888888888889,
-  "t": [
-   5.403062582291668,
-   6.520784716666667
-  ]
+  "emu_hyp": "don't it is such a noble ambition between that it is a pity it has such a shallow proination of the italian",
+  "board_s": 13.708185,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -146,10 +139,9 @@
   "host_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
   "chip_match": true,
   "wer": 0.0,
-  "t": [
-   5.325263283333334,
-   6.425031733333334
-  ]
+  "emu_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+  "board_s": 13.375595,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -165,10 +157,9 @@
   "host_hyp": "it is such an open ambition that it is a pity it has usually such a shallow foundation",
   "chip_match": true,
   "wer": 11.11111111111111,
-  "t": [
-   5.324115857291667,
-   6.423619516666667
-  ]
+  "emu_hyp": "it is such an open ambition that it is a pity it has usually such a shallow foundation",
+  "board_s": 13.354008,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -184,10 +175,9 @@
   "host_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
   "chip_match": false,
   "wer": 5.555555555555555,
-  "t": [
-   5.354591838541667,
-   6.461128416666667
-  ]
+  "emu_hyp": "it is such a noble ambition that it is a pity it has usually such a shallow combination",
+  "board_s": 13.490058,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -203,10 +193,9 @@
   "host_hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
   "chip_match": true,
   "wer": 0.0,
-  "t": [
-   8.5005956203125,
-   10.266579225000001
-  ]
+  "emu_hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+  "board_s": 21.331615,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -222,10 +211,9 @@
   "host_hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
   "chip_match": true,
   "wer": 0.0,
-  "t": [
-   8.520239128125,
-   10.29075585
-  ]
+  "emu_hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+  "board_s": 21.368756999999995,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -241,10 +229,9 @@
   "host_hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
   "chip_match": true,
   "wer": 0.0,
-  "t": [
-   8.506700230729168,
-   10.274092591666667
-  ]
+  "emu_hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+  "board_s": 21.332128,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -260,10 +247,9 @@
   "host_hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
   "chip_match": true,
   "wer": 0.0,
-  "t": [
-   8.5106999109375,
-   10.279015275
-  ]
+  "emu_hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+  "board_s": 21.358315,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -273,16 +259,15 @@
   "desc": "real cafeteria noise with background talk (DEMAND)",
   "ref": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
   "dur": 10.6,
-  "hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness and some against",
+  "hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness than some against",
   "mp3": "samples/rooms_14.mp3",
   "instr": 2558389950,
-  "host_hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness than some against",
+  "host_hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling the greater or less remoteness than some of",
   "chip_match": false,
   "wer": 12.5,
-  "t": [
-   8.469870059375001,
-   10.22876315
-  ]
+  "emu_hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness and some against",
+  "board_s": 21.20183,
+  "emu_match": false
  },
  {
   "group": "rooms",
@@ -298,10 +283,9 @@
   "host_hyp": "in actual fact there are doubtless various factors that concur in giving us feeling a greater or less remoteness and some member of",
   "chip_match": true,
   "wer": 20.833333333333336,
-  "t": [
-   8.505397813541666,
-   10.272489616666668
-  ]
+  "emu_hyp": "in actual fact there are doubtless various factors that concur in giving us feeling a greater or less remoteness and some member of",
+  "board_s": 21.246081,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -314,13 +298,12 @@
   "hyp": "in actual fact there are doubtless various factors that concur by giving a spar or greater or less remote and some",
   "mp3": "samples/rooms_16.mp3",
   "instr": 2566121700,
-  "host_hyp": "in actual fact there are doubtless various factors that concur by giving a spar or greater or less remote distance and some",
+  "host_hyp": "in actual fact there are doubtless various factors that concur by giving a spar or greater or less remote and some like",
   "chip_match": false,
   "wer": 37.5,
-  "t": [
-   8.49290423125,
-   10.257112900000001
-  ]
+  "emu_hyp": "in actual fact there are doubtless various factors that concur by giving a spar or greater or less remote and some",
+  "board_s": 21.223294,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -336,10 +319,9 @@
   "host_hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
   "chip_match": true,
   "wer": 0.0,
-  "t": [
-   8.520504497395834,
-   10.291082458333333
-  ]
+  "emu_hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+  "board_s": 21.379197999999995,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -355,10 +337,9 @@
   "host_hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
   "chip_match": true,
   "wer": 0.0,
-  "t": [
-   8.517687620833334,
-   10.287615533333334
-  ]
+  "emu_hyp": "in actual fact there are doubtless various factors that concur in giving us the feeling of greater or less remoteness in some remembered event",
+  "board_s": 21.408319,
+  "emu_match": true
  },
  {
   "group": "rooms",
@@ -374,10 +355,9 @@
   "host_hyp": "in actual fact there are doubtless various factors that occur in giving us the feeling a greater or less remoteness and some remembered event",
   "chip_match": true,
   "wer": 12.5,
-  "t": [
-   8.5210861796875,
-   10.291798375
-  ]
+  "emu_hyp": "in actual fact there are doubtless various factors that occur in giving us the feeling a greater or less remoteness and some remembered event",
+  "board_s": 21.373281,
+  "emu_match": true
  },
  {
   "group": "real",
@@ -393,10 +373,9 @@
   "host_hyp": "no such authority was given for the course of peel whose registries remained closed",
   "chip_match": true,
   "wer": 14.285714285714285,
-  "t": [
-   4.742377889062501,
-   5.721794325000001
-  ]
+  "emu_hyp": "no such authority was given for the course of peel whose registries remained closed",
+  "board_s": 11.992405,
+  "emu_match": true
  },
  {
   "group": "real",
@@ -412,10 +391,9 @@
   "host_hyp": "the performance was recorded and later released on a live album titled late orchestration",
   "chip_match": true,
   "wer": 0.0,
-  "t": [
-   5.906734107291667,
-   7.128263516666667
-  ]
+  "emu_hyp": "the performance was recorded and later released on a live album titled late orchestration",
+  "board_s": 14.736474,
+  "emu_match": true
  },
  {
   "group": "real",
@@ -431,10 +409,9 @@
   "host_hyp": "he has been locked up so long he has been mostly forgotten about",
   "chip_match": true,
   "wer": 0.0,
-  "t": [
-   4.3411604125,
-   5.2366282
-  ]
+  "emu_hyp": "he has been locked up so long he has been mostly forgotten about",
+  "board_s": 11.060181,
+  "emu_match": true
  },
  {
   "group": "real",
@@ -444,16 +421,15 @@
   "desc": "European Parliament microphones",
   "ref": "the qatari government and the football authorities must take notice",
   "dur": 3.7599375,
-  "hyp": "the qari government and the football authorities must take notice",
+  "hyp": "the qatari government and the football authorities must take notice",
   "mp3": "samples/real_23.mp3",
   "instr": 843912700,
   "host_hyp": "the qatari government and the football authorities must take notice",
-  "chip_match": false,
-  "wer": 10.0,
-  "t": [
-   2.814951585416667,
-   3.395141566666667
-  ]
+  "chip_match": true,
+  "wer": 0.0,
+  "emu_hyp": "the qari government and the football authorities must take notice",
+  "board_s": 7.362778,
+  "emu_match": false
  },
  {
   "group": "real",
@@ -469,10 +445,9 @@
   "host_hyp": "the court still sees scope for further improving the quality of spending by simply applying the current system to its full potential",
   "chip_match": true,
   "wer": 0.0,
-  "t": [
-   6.246115578125001,
-   7.540942250000001
-  ]
+  "emu_hyp": "the court still sees scope for further improving the quality of spending by simply applying the current system to its full potential",
+  "board_s": 15.9334,
+  "emu_match": true
  },
  {
   "group": "real",
@@ -482,16 +457,15 @@
   "desc": "spontaneous meeting speech, headset microphone",
   "ref": "so that indicates that there's an menu under that menu",
   "dur": 3.5700625,
-  "hyp": "so that indicates a menu under that menu",
+  "hyp": "so that indicates a t menu under that menu",
   "mp3": "samples/real_25.mp3",
   "instr": 796670275,
   "host_hyp": "so that indicates a menu under that menu",
-  "chip_match": true,
+  "chip_match": false,
   "wer": 30.0,
-  "t": [
-   2.659018527604167,
-   3.206729341666667
-  ]
+  "emu_hyp": "so that indicates a menu under that menu",
+  "board_s": 6.922922,
+  "emu_match": false
  },
  {
   "group": "real",
@@ -507,9 +481,8 @@
   "host_hyp": "yeah i think of it in terms of you know not even maybe to what",
   "chip_match": true,
   "wer": 6.666666666666667,
-  "t": [
-   2.857776972395834,
-   3.4463716583333337
-  ]
+  "emu_hyp": "yeah i think of it in terms of you know not even maybe to what",
+  "board_s": 7.325178,
+  "emu_match": true
  }
 ]
