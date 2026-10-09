@@ -6,7 +6,7 @@ Each clip is transcribed by the host build of the engine and by the real firmwar
 Espressif's QEMU, which also gives the exact instruction count; the page shows reference, on-chip transcript (errors
 marked), WER and the estimated on-chip time.
 
-python make_demo_page.py --repo ../../Ita-public --out ../../Ita-public/docs   # needs ESP-IDF + QEMU
+python make_demo_page.py --repo .. --out ../docs   # needs ESP-IDF + QEMU
 Models, firmware and emulator come from --repo (the public release); clips come from this repository's data/.
 """
 import argparse, html, json, os, random, re, subprocess, sys
