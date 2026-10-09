@@ -157,7 +157,7 @@ when you stop only the last partial chunk is left to compute. Partial text appea
 | Same `oido_stream.tnm`, full-context mode | 3.4 / 7.8 | 6.2 | 7.2–22.4 s |
 
 - **What we measured.** When the chip has kept up with the audio, the last step after the final chunk takes 1.1 s on average on the board
-  (0.8–1.7 s over 12 clips). But on one core the chip runs at 1.96× real time, so it falls behind the speaker and the backlog grows
+  (0.8–1.6 s over 12 clips). But on one core the chip runs at 1.96× real time, so it falls behind the speaker and the backlog grows
   with the length of the utterance. Feeding six clips at the rate of speech (one 20 ms block when its last sample would have been spoken), the final text appeared
   4.1–11.1 s after the last sample (3.6–10.6 s clips; mean 6.7 s), roughly (RTF − 1) × duration plus that last step. The 0.8 s end-of-speech
   wait (`CONFIG_TASR_SEG_HANG_MS`, or `live_demo.py --pause`) comes on top. Streaming halves the wait; it does not give the 1.1–1.4 s we had estimated
