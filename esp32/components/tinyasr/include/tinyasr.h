@@ -46,6 +46,12 @@ void tasr_profile_reset(void);
 // Parallelism hook: run fn over [0, n) split across workers (worker ids 0..1). Default: serial.
 typedef void (*tasr_job_fn)(void *ctx, int begin, int end, int worker);
 extern void (*tasr_parallel)(tasr_job_fn fn, void *ctx, int n);
+// Which call sites of the neural-network paths use tasr_parallel (bit = site id; the others run on worker 0 only).
+// Sites: 0 features, 1 layer norm, 2 SiLU, 3 GEMM K<=256, 4 quantise, 5 conv0, 6 im2col, 7 attention, 8 depthwise conv,
+// 9 GEMM K<=1024, 10 GEMM K>1024, 11 int4 GEMM, 12 language-model GEMM. Default: all.
+extern uint32_t tasr_par_mask;
+#define TASR_PAR(site, fn, ctx, n) \
+    do { if (tasr_par_mask & (1u << (site))) tasr_parallel(fn, ctx, n); else (fn)((ctx), 0, (n), 0); } while (0)
 
 // Memory hooks (default: aligned malloc). kind: 0 = large/slow ok (PSRAM), 1 = hot (internal SRAM preferred)
 extern void *(*tasr_alloc)(size_t size, int kind);

@@ -22,6 +22,11 @@ void (*tasr_free)(void *) = default_free;
 
 static void serial_parallel(tasr_job_fn fn, void *ctx, int n) { fn(ctx, 0, n, 0); }
 void (*tasr_parallel)(tasr_job_fn fn, void *ctx, int n) = serial_parallel;
+#ifdef CONFIG_TASR_PAR_MASK
+uint32_t tasr_par_mask = CONFIG_TASR_PAR_MASK;
+#else
+uint32_t tasr_par_mask = 0xFFFFFFFFu;
+#endif
 
 #ifdef TASR_PROFILE
 #ifdef ESP_PLATFORM

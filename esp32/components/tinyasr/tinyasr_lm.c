@@ -138,7 +138,7 @@ static void lm_gemm_job(void *c, int b, int e, int w)
 static void lm_qlin(tasr_decoder_t *d, const tasr_qlin_t *L, int T, float *y, int ldy)
 {
     lmjob_t j = {d, L, T, ldy, y};
-    tasr_parallel(lm_gemm_job, &j, L->n);  // split output rows across both cores
+    TASR_PAR(12, lm_gemm_job, &j, L->n);  // split output rows across both cores
 }
 
 static int slot_alloc(tasr_decoder_t *d) { return d->n_free > 0 ? d->free_slots[--d->n_free] : -1; }

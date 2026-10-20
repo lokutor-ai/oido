@@ -279,12 +279,7 @@ static void ndump(const char *what, int i, const float *x, int rows, int cols)
 #define ndump(what, i, x, rows, cols)
 #endif
 
-// Experiment: CONFIG_TASR_PAR_MASK selects which call sites of the utterance path really use both cores (bit = site id)
-#ifdef CONFIG_TASR_PAR_MASK
-#define NPAR(site, fn, ctx, n) do { if (CONFIG_TASR_PAR_MASK & (1u << (site))) tasr_parallel(fn, ctx, n); else fn(ctx, 0, n, 0); } while (0)
-#else
-#define NPAR(site, fn, ctx, n) tasr_parallel(fn, ctx, n)
-#endif
+#define NPAR(site, fn, ctx, n) TASR_PAR(site, fn, ctx, n)
 
 // ------------------------------------------------------------------ helpers
 static float nsig_tab[385], nsig_slope[384];
@@ -1441,7 +1436,7 @@ static void s_encode_chunk(struct tasr_nemo_stream *s, int n)
             s->nk = k0 + n;
             NB(ta);
             satt_t aj = {s, li, n};
-            tasr_parallel(satt_job, &aj, H);
+            NPAR(7, satt_job, &aj, H);
             NE(ta, N_ATT);
             s->nk = nk_save;
         }
@@ -1460,7 +1455,7 @@ static void s_encode_chunk(struct tasr_nemo_stream *s, int n)
         {
             NB(td);
             ndw_t jd = {gh, s->att, L, n, d, m->k};  // att is free again: use it for the conv output
-            tasr_parallel(ndw_job, &jd, n);
+            NPAR(8, ndw_job, &jd, n);
             NE(td, N_DW);
         }
         memmove(gh, gh + (size_t)n * d, sizeof(float) * halo * d);  // last halo inputs become the past rows
@@ -1505,7 +1500,7 @@ static void s_conv0_row(struct tasr_nemo_stream *s, int r)
     }
     nc0_t j = {m, (const float(*)[NMEL + 2])P, s->c0ring + (size_t)(r % 3) * sc * (f1 + 2), s->cmw};
     memset(s->cmw, 0, sizeof(float) * NW * (f1 + 2));
-    tasr_parallel(nc0_job, &j, sc);
+    NPAR(5, nc0_job, &j, sc);
     float *cm = s->cmaxr + (size_t)(r % 3) * (f1 + 2);
     for (int f = 0; f < f1 + 2; f++) {
         float v = s->cmw[f];
@@ -1569,7 +1564,7 @@ static void s_advance(struct tasr_nemo_stream *s)
         if (tend > s->mel_t) {
             NB(tf);
             smel_t j = {s, s->mel_t, s->n_samp};
-            tasr_parallel(smel_job, &j, tend - s->mel_t);
+            NPAR(0, smel_job, &j, tend - s->mel_t);
             s->mel_t = tend;
             NE(tf, N_FEAT);
         }
@@ -1593,7 +1588,7 @@ static void s_advance(struct tasr_nemo_stream *s)
                 j.rows[dt] = (r >= 0 && !(s->finished && r >= s->T1)) ? s->c0ring + (size_t)(r % 3) * m->sc * (m->f1 + 2) : NULL;
                 j.cmax[dt] = s->cmaxr + (size_t)((r + 3) % 3) * (m->f1 + 2);
             }
-            tasr_parallel(nim_job, &j, f2);
+            NPAR(6, nim_job, &j, f2);
         }
         NE(tim, N_IM2COL);
         s->t2_next++;
