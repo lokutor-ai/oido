@@ -302,6 +302,7 @@ models/                    nemo8.tnm (int8, 14.0 MB), nemo4.tnm (int4, 8.3 MB), 
 - Very noisy crowds and reverberant rooms remain hard.
 - Speed: about twice slower than real time on one core today (see [Speed and memory](#speed-and-memory)); the two-core mode is not correct on silicon yet.
 - Requires an ESP32-S3 with 16 MB flash and 8 MB octal PSRAM (N16R8).
+- Known issue: the one-shot batch `transcribe` call inside a live microphone capture loop hangs on the chip, although the same call works on clips stored in flash and streaming works in the live loop. The cause is not understood; use streaming for live capture.
 
 ## License
 
