@@ -17,7 +17,7 @@ reverberant rooms and real meetings, each with the reference, the on-chip transc
 it took on the chip.
 
 > **Status (9 October 2026).** Measured on an ESP32-S3-WROOM-1-N16R8 board, one core at 240 MHz: the English int8 model with
-> the language model runs at **1.97× real time** (1.91–2.02 over 27 clips of 3.6–10.6 s). Spanish runs at 2.06×, int4 at 1.76×,
+> the language model runs at **1.97× real time** in utterance mode, i.e. one-shot batch transcription of clips stored in flash (1.91–2.02 over 27 clips of 3.6–10.6 s; this is not the live microphone path). Spanish runs at 2.06×, int4 at 1.76×,
 > the transducer at 1.89× (see [Speed and memory](#speed-and-memory)). **That is not real time yet:** a 4-second command shows its
 > text about 8.7 s after it ends (including the 0.8 s end-of-speech wait). The two-core mode, which emulation had predicted would
 > approach real time, gives wrong transcripts on silicon and is disabled (see [Dual core](#dual-core)).
@@ -115,7 +115,7 @@ On the complete test sets (60 hours) the numbers are 13.8 / 10.9 / 15.7 / 11.3 w
 ## Speed and memory
 
 Measured on one ESP32-S3-WROOM-1-N16R8 board (DevKitC-1 class), ESP-IDF 5.5.1, CPU 240 MHz, flash QIO, octal PSRAM 80 MHz,
-**one core**, `TASR_MODE=file` (clips in flash, timed with the 64-bit microsecond timer). Raw numbers:
+**one core**, `TASR_MODE=file` (batch utterance transcription of clips stored in flash, not the live microphone path; timed with the 64-bit microsecond timer). Raw numbers:
 [`results/board_esp32s3.json`](results/board_esp32s3.json).
 
 | Model (with its language model unless noted) | Clips | Real-time factor (range) | Same transcript as the host build |
