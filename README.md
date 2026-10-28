@@ -204,12 +204,16 @@ layer's output; clip: a 3.8 s VoxPopuli sentence; every line below is 3 runs):
 - Even a correct two-core mode would not reach real time on this evidence: the incorrect spin-wait build ran at 0.78 × the one-core time, not the 0.55 the
   instruction counts promised, so the cores contend for memory.
 
-We do not know the cause. A hardware margin problem at 240 MHz (supply droop or timing) fits the 160 MHz result, the random values and the
-`IllegalInstruction` crashes, but a second engine (Lokutor's Ito TTS) running a synthetic two-core stress of the same shape on the same board at 240 MHz
-(K = 704, 64 rows, a shared 45 KB tile in internal SRAM, an 88/88 split, 3 × 90 s, plus other shapes, about 21 minutes in all, every call checked against a one-core reference) saw no mismatch and no
-crash, and its real firmware passed a 600-iteration soak. So a plain supply problem on this board looks unlikely; something specific to our kernel, to
-how the two cores are started and joined, or to streaming weights from external memory in lock-step is more likely, and we have not found it. If you can,
-try `TASR_DUAL=1` on another board or supply and tell us what you see (`python esp32/tools/dual_bisect.py --help`).
+What the failure looks like, and what we now think it is:
+
+- A stress test with no Oído code in it, on the same module class, reproduced silent hangs and brownout resets under dense PIE load on both cores, while plain loads on both cores, or PIE on one core, passed. The failure follows the power drawn (activity times clock frequency) and not the memory the data lives in.
+- The chip's own brownout detector, read at each of its thresholds, showed the 3.3 V rail falling below its lowest threshold (about 2.44 V) when both cores ran dense PIE loads, and staying above 3.19 V at idle. This is an on-chip indication, not a measurement of the rail with an instrument.
+- The failure is therefore consistent with a collapse of the board's 3.3 V supply, not with a fault in the engine. That fits the 160 MHz result, the random values, the `IllegalInstruction` crashes and the dependence on timing and memory layout.
+- Ito's own long soak (a 21-minute synthetic two-core stress and 600 iterations of a golden sentence) passed on a different board with a better supply. Both statements are true: whether a board survives depends on its regulator, bulk capacitance, cable and host port. See Ito's [`esp32/DUAL_CORE_POWER.md`](https://github.com/lokutor-ai/ito/blob/main/esp32/DUAL_CORE_POWER.md).
+
+If you can, try `TASR_DUAL=1` on another board or supply and tell us what you see (`python esp32/tools/dual_bisect.py --help`).
+
+**A split that works on this board (measured).** The parallel call sites go through a runtime mask, `tasr_par_mask` (one bit per site; a cleared bit runs that site on core 0 only). With the encoder matrix products kept on core 0 and the other parallel sites (features, layer norm, SiLU, quantise, convolutions, attention) split across both cores, the Spanish streaming run gave a transcript identical to the host's and a real-time factor of 1.84 against 1.92 on one core. The matrix products are about 54 % of the cycles, which bounds this kind of split to a saving of about a quarter of the time. Most split stages lose 30 to 50 % of their cycles, but im2col is 2.5 times slower on two cores, because its gather writes external memory from both cores. The matrix products on both cores fail at a fixed early call (the first encoder GEMM, the 7th parallel call of the streaming path) with a hang, or a cache error in the language model's GEMM.
 
 ## How it works
 
