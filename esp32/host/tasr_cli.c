@@ -65,13 +65,16 @@ int main(int argc, char **argv)
         return 1;
     }
     const char *lm_path = NULL;
-    int chunk = 32, left = 4, first = 2, beam = 4;
+    int chunk = 32, left = 4, first = 2, beam = 4, topk = 6;
     float lw = -1.f, tb = -1.f;
+    int nstream = 0;   // --nstream: streaming engine for a NeMo model (chunk/left from --chunk/--left in encoder frames, 0 = header defaults)
     for (int i = 2; i < argc; i++) {
         if (!strcmp(argv[i], "--lm") && i + 1 < argc) { lm_path = argv[++i]; first = i + 1; }
         else if (!strcmp(argv[i], "--chunk") && i + 1 < argc) { chunk = atoi(argv[++i]); first = i + 1; }
         else if (!strcmp(argv[i], "--left") && i + 1 < argc) { left = atoi(argv[++i]); first = i + 1; }
+        else if (!strcmp(argv[i], "--nstream")) { nstream = 1; first = i + 1; chunk = 0; left = 0; }
         else if (!strcmp(argv[i], "--beam") && i + 1 < argc) { beam = atoi(argv[++i]); first = i + 1; }
+        else if (!strcmp(argv[i], "--topk") && i + 1 < argc) { topk = atoi(argv[++i]); first = i + 1; }
         else if (!strcmp(argv[i], "--lm_weight") && i + 1 < argc) { lw = (float)atof(argv[++i]); first = i + 1; }
         else if (!strcmp(argv[i], "--token_bonus") && i + 1 < argc) { tb = (float)atof(argv[++i]); first = i + 1; }
     }
@@ -92,7 +95,7 @@ int main(int argc, char **argv)
     if (nemo) {  // defaults tuned on dev-clean: beam 4, LM weight 0.3, token bonus 0.5
         nm = tasr_nemo_load(mb, msz);
         if (!nm) { fprintf(stderr, "cannot load NeMo model %s\n", argv[1]); return 1; }
-        if (lm) dec = tasr_decoder_create(lm, 1025, beam, 6, lw < 0 ? tasr_lm_weight(lm, 0.3f) : lw, tb < 0 ? tasr_lm_bonus(lm, 0.5f) : tb);
+        if (lm) dec = tasr_decoder_create(lm, 1025, beam, topk, lw < 0 ? tasr_lm_weight(lm, 0.3f) : lw, tb < 0 ? tasr_lm_bonus(lm, 0.5f) : tb);
     } else {
         tasr_model_t *m = tasr_model_load(mb, msz);
         if (!m) { fprintf(stderr, "cannot load model %s\n", argv[1]); return 1; }
@@ -100,12 +103,18 @@ int main(int argc, char **argv)
         if (lm) tasr_stream_set_decoder(s, tasr_decoder_create(lm, 257, beam, 6, lw < 0 ? 0.5f : lw, tb < 0 ? 2.0f : tb));
     }
     static char text[16384];
+    tasr_nemo_stream_t *ns_ = (nemo && nstream) ? tasr_nemo_stream_new(nm, chunk, left, dec) : NULL;
+    if (nemo && nstream && !ns_) { fprintf(stderr, "model is not a streaming model\n"); return 1; }
     for (int i = first; i < argc; i++) {
         int ns = 0;
         int16_t *pcm = read_wav(argv[i], &ns);
         if (!pcm) { fprintf(stderr, "skip %s\n", argv[i]); continue; }
         clock_t t0 = clock();
-        if (nemo) {
+        if (ns_) {
+            tasr_nemo_stream_reset(ns_);
+            for (int j = 0; j < ns; j += 320) tasr_nemo_stream_feed(ns_, pcm + j, ns - j < 320 ? ns - j : 320);
+            tasr_nemo_stream_finish(ns_, text, sizeof(text));
+        } else if (nemo) {
             tasr_nemo_transcribe(nm, pcm, ns, dec, text, sizeof(text), NULL, 0, NULL);
         } else {
             tasr_stream_reset(s);

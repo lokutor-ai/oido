@@ -16,6 +16,14 @@ Models on Hugging Face: [int8](https://huggingface.co/lokutor-ai/oido-ctc-small-
 reverberant rooms and real meetings, each with the reference, the on-chip transcript (errors marked) and the compute
 it took on the chip.
 
+> **Status (3 November 2026): real time on one core.** Version 2 of the models and of the engine runs **faster than speech** on a single 240 MHz core of the
+> ESP32-S3-WROOM-1-N16R8 (one board, no neural accelerator): streaming real-time factor **0.54 (variant B) and 0.72 (variant A)** with the on-chip language model, and the final text
+> appears **259 ms (B) / 431 ms (A) after the end of speech** with audio fed at the speed of speech (version 1: 1.8-2.0× *slower* than speech, 4-11 s). Streaming costs accuracy:
+> LibriSpeech test-clean / test-other 7.1 / 16.4 % (A) and 10.6 / 22.4 % (B) with 0.64 s chunks and the language model
+> (test-other stays above 10 % in every streaming mode). See [Real time (v2)](#real-time-v2). The v1 numbers further down describe the version-1 models.
+
+<details><summary>Status of version 1 (9 October 2026): not real time</summary>
+
 > **Status (9 October 2026).** Measured on an ESP32-S3-WROOM-1-N16R8 board, one core at 240 MHz: the English int8 model with
 > the language model runs at **1.97× real time** in utterance mode, i.e. one-shot batch transcription of clips stored in flash (1.91–2.02 over 27 clips of 3.6–10.6 s; this is not the live microphone path). Spanish runs at 2.06×, int4 at 1.76×,
 > the transducer at 1.89× (see [Speed and memory](#speed-and-memory)). **That is not real time yet:** a 4-second command shows its
@@ -25,12 +33,16 @@ it took on the chip.
 > build of the same C code; it differs from the board on some hard clips because of the laptop's math library (22 of the 27
 > clips are identical, and the word error rate on those 27 clips is the same, 7.14 %).
 
+</details>
+
 ## Which model should I use?
 
 There is **one model per language**, and the models that stream also run in full-context ("utterance") mode.
 
 | I want | Use | Language | Modes | Size | License |
 |---|---|---|---|---|---|
+| **Real time on the chip**, best accuracy | `models/oido_v2a.tnm` + `oido_v2.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-v2-realtime-int4)) | English | **streaming** (RTF 0.72; final text 431 ms after the end of speech) and full-context | 7.7 + 1.3 MB | CC-BY-SA-4.0 |
+| **Real time on the chip**, fastest | `models/oido_v2b.tnm` + `oido_v2.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-v2-realtime-int4)) | English | **streaming** (RTF 0.54; final text 259 ms) and full-context | 5.9 + 1.3 MB | CC-BY-SA-4.0 |
 | The best English accuracy | `models/nemo8.tnm` + `nemo_lm.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-ctc-small-int8)) | English | utterance only: text about 3 s after you stop | 14.0 + 1.3 MB | CC-BY-4.0 |
 | English with the least flash | `models/nemo4.tnm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-ctc-small-int4)) | English | utterance only | 8.3 MB | CC-BY-SA-4.0 |
 | English, low latency (voice agents) | `models/oido_stream.tnm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-ctc-small-stream-int8)) | English | **streaming** (final text about 4 s after a 4 s command ends, measured; see [below](#low-latency-streaming-mode)) and full-context | 14.0 MB | CC-BY-SA-4.0 |
@@ -44,6 +56,46 @@ There is **one model per language**, and the models that stream also run in full
   On the board it runs at 1.96× real time on one core, so the final text arrives about half as late as in utterance mode
   (4.1–11.1 s after clips of 3.6–10.6 s, against 7.2–22.4 s), not within 1–2 s.
 - **No bilingual model:** English and Spanish have different vocabularies, so each is its own file.
+
+## Real time (v2)
+
+Version 1 spent its time on memory traffic, not on arithmetic: a streaming recognizer re-reads every weight for every chunk, and the chip reads internal SRAM at 3.8 GB/s,
+PSRAM at 89 MB/s and flash at 32 MB/s (measured, [`esp32/tools/gemm_bench`](esp32/tools/gemm_bench)). Version 2 changes the model and the engine to fit that:
+
+- **Model** (`models/oido_v2a.tnm`, `models/oido_v2b.tnm`, int4 quantization-aware training; license CC-BY-SA-4.0): 80 ms encoder frames (pairs of frames are stacked), a 64-channel convolutional front end, 16 blocks (A) or 12 blocks (B), 7.7 / 5.9 MB.
+- **Engine**: the ROM's asynchronous data-cache preload overlaps the weight stream with computation (layers 38-41 % faster, bit-identical), streaming state first and weights in the rest of PSRAM, work buffers in SRAM, table-driven exp/tanh/sigmoid, a blank-frame shortcut and a beam-2 option in the decoder, deterministic math so that the host build and the chip print identical transcripts (18 of 18 test clips).
+
+Measured on a board (one core, 240 MHz, 18 clips of 120 s, language model on):
+
+| | A: 16 blocks, int4 | B: 12 blocks, int4 |
+|---|---|---|
+| Streaming real-time factor | **0.72** (beam 4 / top 6), 0.70 (beam 2 / top 3) | **0.54** (beam 2 / top 3) |
+| Compute left after the last sample | 289 ms | 198 ms |
+| Final text after the end of speech, audio fed at real-time speed (8 clips) | 431 ms (281-574) | 259 ms (159-391) |
+| 1.28 s chunks instead of 0.64 s (`sdkconfig.chunk16`) | 0.61, 658 ms | |
+| Board transcripts equal the host build's | 18 / 18 | 18 / 18 |
+
+LibriSpeech word error rate (%), host build of the same engine, test-clean / test-other:
+
+| Mode | A greedy | A + language model | B greedy | B + language model |
+|---|---|---|---|---|
+| Streaming, 0.64 s chunks | 10.01 / 19.90 | **7.14 / 16.37** (beam 4 / top 6); 7.81 / 17.29 (2 / 3) | 13.43 / 26.10 | 9.74 / 21.28 (4 / 6); **10.63 / 22.42** (2 / 3) |
+| Streaming, 1.28 s chunks | 8.02 / 17.00 | 5.96 / 14.03 | 10.68 / 22.37 | 8.08 / 18.45 |
+| Full context | 5.66 / 12.79 | 4.58 / 10.71 | 7.72 / 17.34 | 6.15 / 14.41 |
+
+What this does not give you: noisy ("other") speech below 10 % in streaming mode, a bilingual or Spanish v2 model, two-core operation, or the live-microphone mode measured (the microphone ring and the 20 s recording buffer take
+0.9 MB of PSRAM, which pushes more weights to flash; with the microphone's PSRAM budget the benchmark build measures about 0.015 more, 0.71 for A and 0.55 for B; the I2S capture path itself was not measured because the test board has no microphone). Details, the ablation of each change and the bandwidth table are in the paper (Section 6) and in
+[`results/v2`](results/v2) (evaluation tables, parity checks); every board run is in [`esp32/bench`](esp32/bench).
+
+Run it:
+
+```bash
+# board: ESP32-S3-DevKitC-1 N16R8 (+ INMP441 on GPIO 4/5/6 for the live microphone)
+esp32/tools/flash.sh /dev/ttyUSB0 models/oido_v2a.tnm models/oido_v2.tlm            # variant A, live microphone
+TASR_MODE=file TASR_PACED=1 esp32/tools/flash.sh /dev/ttyUSB0 models/oido_v2b.tnm models/oido_v2.tlm clip.wav "reference"   # B, clip at real-time pace
+# laptop (same engine, same transcripts as the chip)
+cd esp32/host && make && python live_demo.py --model models/oido_v2a.tnm
+```
 
 ## Accuracy
 

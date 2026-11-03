@@ -5,6 +5,13 @@ Pipeline: preemph 0.97 -> centered STFT (n_fft 512, hop 160, win 400 symmetric H
 (80) -> log(x + 2^-24) -> per-utterance per-feature mean/std -> striding conv subsampling (2x conv3x3 s2, 176 ch)
 -> 16 Conformer layers (rel-pos MHSA with untied biases, conv k=31 + BatchNorm, macaron FF) -> 1x1 conv -> CTC
 (blank = last index).
+
+"Oido v2" variants (cfg keys sub_ch / stack / n_layers; NemoSmall.convert() derives them from a trained model):
+  - light front end: conv0 / conv2 with sub_ch (e.g. 64) channels instead of 176, sub_out = Linear(sub_ch * 20 -> d);
+  - frame stacking (stack = 2): after sub_out * sqrt(d), pairs of consecutive 40 ms frames are concatenated and projected
+    2d -> d (x'[i] = W [x[2i]; x[2i+1]] + b, odd tail paired with zeros, lens' = ceil(lens / 2)); everything downstream
+    runs at 12.5 frames/s;
+  - fewer layers (n_layers).
 """
 import math
 import torch
@@ -82,25 +89,98 @@ class Layer(nn.Module):
         return self.norm_out(x)
 
 
+F2 = 20  # frequency positions after the two stride-2 convs on 80 mel bins
+
+
+def cfg_from_state(sd):
+    """Architecture of a NemoSmall state dict (own format: conv0 / conv2 / sub_out / layers / head / stack_proj)."""
+    n = 1 + max(int(k.split(".")[1]) for k in sd if k.startswith("layers."))
+    return dict(d=sd["sub_out.weight"].shape[0], h=sd["layers.0.pos_bias_u"].shape[0],
+                ff=sd["layers.0.ff1_l1.weight"].shape[0], k=sd["layers.0.dw.weight"].shape[-1],
+                vocab=sd["head.weight"].shape[0] - 1, sub_ch=sd["conv0.weight"].shape[0],
+                stack=2 if "stack_proj.weight" in sd else 1, n_layers=n)
+
+
 class NemoSmall(nn.Module):
     """Any NeMo Conformer-CTC with striding subsampling; sizes are read from the state dict (small: d=176, 16 layers,
-    4 heads, FF 704; large: d=512, 18 layers, 8 heads, FF 2048)."""
-    def __init__(self, sd):
+    4 heads, FF 704; large: d=512, 18 layers, 8 heads, FF 2048).
+
+    NemoSmall(sd)      builds the model from an NVIDIA state dict (sd) with NVIDIA's weights;
+    NemoSmall(cfg=cfg) builds an empty model of that architecture (then load_state_dict from a checkpoint)."""
+    def __init__(self, sd=None, cfg=None):
         super().__init__()
-        C = sd["encoder.pre_encode.conv.0.weight"].shape[0]
-        d, sub_in = sd["encoder.pre_encode.out.weight"].shape
-        n = 1 + max(int(k.split(".")[2]) for k in sd if k.startswith("encoder.layers."))
-        h = sd["encoder.layers.0.self_attn.pos_bias_u"].shape[0]
-        ff = sd["encoder.layers.0.feed_forward1.linear1.weight"].shape[0]
-        k = sd["encoder.layers.0.conv.depthwise_conv.weight"].shape[-1]
-        self.d, self.vocab = d, sd["decoder.decoder_layers.0.weight"].shape[0] - 1  # blank = last index
-        self.pre = NemoPre(sd["preprocessor.featurizer.window"], sd["preprocessor.featurizer.fb"])
+        if sd is not None:
+            C = sd["encoder.pre_encode.conv.0.weight"].shape[0]
+            d, sub_in = sd["encoder.pre_encode.out.weight"].shape
+            n = 1 + max(int(k.split(".")[2]) for k in sd if k.startswith("encoder.layers."))
+            cfg = dict(d=d, h=sd["encoder.layers.0.self_attn.pos_bias_u"].shape[0],
+                       ff=sd["encoder.layers.0.feed_forward1.linear1.weight"].shape[0],
+                       k=sd["encoder.layers.0.conv.depthwise_conv.weight"].shape[-1],
+                       vocab=sd["decoder.decoder_layers.0.weight"].shape[0] - 1, sub_ch=C, stack=1, n_layers=n)
+            assert sub_in == C * F2
+            window, fb = sd["preprocessor.featurizer.window"], sd["preprocessor.featurizer.fb"]
+        else:
+            cfg = dict(cfg)
+            window, fb = torch.zeros(400), torch.zeros(80, 257)    # filled by load_state_dict
+        self.cfg = cfg
+        C, d = cfg["sub_ch"], cfg["d"]
+        self.d, self.vocab, self.stack = d, cfg["vocab"], cfg.get("stack", 1)  # blank = last index
+        self.pre = NemoPre(window, fb)
         self.conv0 = nn.Conv2d(1, C, 3, stride=2, padding=1)
         self.conv2 = nn.Conv2d(C, C, 3, stride=2, padding=1)
-        self.sub_out = nn.Linear(sub_in, d)
-        self.layers = nn.ModuleList([Layer(d, h, ff, k) for _ in range(n)])
+        self.sub_out = nn.Linear(C * F2, d)
+        if self.stack == 2:
+            self.stack_proj = nn.Linear(2 * d, d)
+            with torch.no_grad():                       # average of the two frames
+                self.stack_proj.weight.copy_(torch.cat([0.5 * torch.eye(d), 0.5 * torch.eye(d)], 1))
+                self.stack_proj.bias.zero_()
+        self.layers = nn.ModuleList([Layer(d, cfg["h"], cfg["ff"], cfg["k"]) for _ in range(cfg["n_layers"])])
         self.head = nn.Linear(d, self.vocab + 1)
-        self.load_nemo(sd)
+        if sd is not None:
+            self.load_nemo(sd)
+
+    @staticmethod
+    def from_ckpt(st):
+        """Model from a checkpoint dict of this code ('model' state dict, optional 'cfg'); also loads old-format ones."""
+        sd = st["model"] if "model" in st else st
+        m = NemoSmall(cfg=st.get("cfg") or cfg_from_state(sd))
+        m.load_state_dict(sd)
+        return m
+
+    def stack_frames(self, x):
+        """(..., T, d) 40 ms frames -> (..., ceil(T / 2), d) 80 ms frames; an odd tail frame is paired with zeros."""
+        if self.stack != 2:
+            return x
+        if x.shape[-2] % 2:
+            x = F.pad(x, (0, 0, 0, 1))
+        x = x.reshape(*x.shape[:-2], x.shape[-2] // 2, 2 * x.shape[-1])
+        return F.linear(x, self.stack_proj.weight, self.stack_proj.bias)
+
+    @torch.no_grad()
+    def convert(self, sub_ch=0, stack=1, layers=None):
+        """New model from this (stack 1) one: keep the sub_ch most important front-end channels (ranked by the L2 norm
+        of the sub_out columns of each conv2 output channel, sub_out input index = c * F2 + f; the same channels are
+        kept in conv0 and as conv2 inputs), add frame stacking (init: average of the pair), keep only the listed layers
+        (list of indices, default all)."""
+        assert self.stack == 1
+        C = self.conv0.weight.shape[0]
+        sub_ch = sub_ch or C
+        layers = list(range(len(self.layers))) if layers is None else list(layers)
+        n = NemoSmall(cfg=dict(self.cfg, sub_ch=sub_ch, stack=stack, n_layers=len(layers)))
+        n.pre.load_state_dict(self.pre.state_dict())
+        if sub_ch == C:
+            sel = torch.arange(C)
+        else:
+            score = self.sub_out.weight.view(self.d, C, F2).norm(dim=(0, 2))
+            sel = score.topk(sub_ch).indices.sort().values
+        n.conv0.weight.copy_(self.conv0.weight[sel]); n.conv0.bias.copy_(self.conv0.bias[sel])
+        n.conv2.weight.copy_(self.conv2.weight[sel][:, sel]); n.conv2.bias.copy_(self.conv2.bias[sel])
+        n.sub_out.weight.copy_(self.sub_out.weight.view(self.d, C, F2)[:, sel].reshape(self.d, sub_ch * F2))
+        n.sub_out.bias.copy_(self.sub_out.bias)
+        for j, i in enumerate(layers):
+            n.layers[j].load_state_dict(self.layers[i].state_dict())
+        n.head.load_state_dict(self.head.state_dict())
+        return n
 
     @torch.no_grad()
     def load_nemo(self, sd):
@@ -128,11 +208,11 @@ class NemoSmall(nn.Module):
         self.head.weight.copy_(g("decoder.decoder_layers.0.weight")[:, :, 0]); self.head.bias.copy_(g("decoder.decoder_layers.0.bias"))
 
     def encode(self, feats):
-        """feats (T, 80) -> encoder output (T', 176)."""
+        """feats (T, 80) -> encoder output (T', 176); T' = ceil(T'' / 2) with frame stacking."""
         x = F.relu(self.conv0(feats[None, None]))
-        x = F.relu(self.conv2(x))                       # (1, 176, T', 20)
+        x = F.relu(self.conv2(x))                       # (1, sub_ch, T'', 20)
         x = self.sub_out(x[0].permute(1, 0, 2).reshape(x.shape[2], -1))
-        x = x * math.sqrt(float(self.d))
+        x = self.stack_frames(x * math.sqrt(float(self.d)))
         pe = rel_pos_emb(x.shape[0], self.d)
         for L in self.layers:
             x = L(x, pe)

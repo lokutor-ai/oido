@@ -1,0 +1,3 @@
+# real-time profile: beam 2 / top-k 3 (about 0.2 WER for ~4x fewer LM steps), see research/v2_speed_log.md
+CONFIG_TASR_BEAM=2
+CONFIG_TASR_TOPK=3

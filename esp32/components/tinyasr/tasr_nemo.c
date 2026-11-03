@@ -5,6 +5,7 @@
 #include <string.h>
 #include "kernels.h"
 #include "tasr_nemo.h"
+#include "tasr_math.h"
 #include "tinyasr.h"
 #include "tinyasr_lm.h"
 
@@ -23,9 +24,9 @@ static inline uint32_t nts(void) { return esp_cpu_get_cycle_count(); }
 #include <time.h>
 static inline uint32_t nts(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return (uint32_t)(t.tv_sec * 1000000000ull + t.tv_nsec); }
 #endif
-enum { N_FEAT, N_CONV0, N_IM2COL, N_CONV2, N_SUB, N_LN, N_GEMM, N_QUANT, N_ACT, N_QKV8, N_POS, N_ATT, N_DW, N_HEAD, N_NP };
+enum { N_FEAT, N_CONV0, N_IM2COL, N_CONV2, N_SUB, N_LN, N_GEMM, N_QUANT, N_ACT, N_QKV8, N_POS, N_ATT, N_DW, N_HEAD, N_DEC, N_NP };
 static const char *nprof_names[N_NP] = {"features", "conv0", "im2col", "gemm_fe", "gemm_k704", "layernorm", "gemm", "quant",
-                                        "act", "qkv_int8", "pos", "attention", "dwconv", "head+dec"};
+                                        "act", "qkv_int8", "pos", "attention", "dwconv", "head", "dec"};
 static uint64_t nprof[N_NP];
 #define NB(v) uint32_t v = nts()
 #define NE(v, c) nprof[c] += (uint32_t)(nts() - v)
@@ -56,6 +57,8 @@ struct tasr_nemo {
     float *mel_w;
     const float *c0_w, *c0_b;
     tasr_qlin_t c2, sub, head;
+    int stack;                                             // header word 13: 2 = pairs of 40 ms frames are stacked to 80 ms
+    tasr_qlin_t stk;                                       // stacking projection, K = 2d -> d (int8)
     int rnnt;                                              // transducer model (RNN-T head instead of CTC)
     tasr_qlin_t r_emb, r_ih, r_hh, r_jenc, r_jpred, r_jout;  // prediction net (embedding, LSTM) + joint net
     nlayer_t *L;
@@ -117,6 +120,7 @@ tasr_nemo_t *tasr_nemo_load(const uint8_t *blob, size_t size)
     m->d = hd[1]; m->h = hd[2]; m->ff = hd[3]; m->k = hd[4]; m->nl = hd[5]; m->sc = hd[6]; m->V = hd[7];
     const int bits = hd[8];
     m->flags = hd[10]; m->s_chunk = hd[11]; m->s_left = hd[12];
+    m->stack = hd[13] >= 2 ? 2 : 1;
     m->dh = m->d / m->h;
     m->dhp = (m->dh + 15) & ~15;
     m->f1 = (NMEL + 2 - 3) / 2 + 1;
@@ -142,6 +146,7 @@ tasr_nemo_t *tasr_nemo_load(const uint8_t *blob, size_t size)
     m->c0_b = nf32(&c, m->sc, &acc);
     m->c2 = nload_qlin(&c, m->sc, m->sc * 9, 8, &acc);
     m->sub = nload_qlin(&c, d, m->sc * m->f2, 8, &acc);
+    if (m->stack == 2) m->stk = nload_qlin(&c, d, 2 * d, 8, &acc);
     m->L = (nlayer_t *)tasr_alloc(sizeof(nlayer_t) * m->nl, 1);
     for (int i = 0; i < m->nl; i++) {
         nlayer_t *L = &m->L[i];
@@ -233,6 +238,7 @@ size_t tasr_nemo_place_weights(tasr_nemo_t *m, size_t budget)
 {
     // front end first (re-read every few frames), then the layers
     size_t left = budget, moved = nmove(&m->c2, &left) + nmove(&m->sub, &left);
+    if (m->stack == 2) moved += nmove(&m->stk, &left);
     if (m->rnnt)  // joint output and LSTM weights are re-read every frame / every token
         moved += nmove(&m->r_jout, &left) + nmove(&m->r_jpred, &left) + nmove(&m->r_ih, &left) + nmove(&m->r_hh, &left) +
                  nmove(&m->r_jenc, &left);
@@ -281,6 +287,9 @@ static void ndump(const char *what, int i, const float *x, int rows, int cols)
 
 #define NPAR(site, fn, ctx, n) TASR_PAR(site, fn, ctx, n)
 
+// blank-frame shortcut of the CTC beam search: logit margin of blank over every other class above which p(blank) > 0.999
+// (1024 classes x exp(-14) = 8.5e-4 < 1e-3, the decoder's own blank-skip threshold)
+#define NBLANK_MARGIN 14.0f
 // ------------------------------------------------------------------ helpers
 static float nsig_tab[385], nsig_slope[384];
 static int sig_ok;
@@ -578,7 +587,7 @@ static void nfeat_job(void *p, int b, int e, int w)
             const float *pp = pw + m->mel_start[k];
             for (int q = 0; q < m->mel_len[k]; q++) acc += pp[q] * wm[q];
             wm += m->mel_len[k];
-            o[k] = logf(acc + 5.9604644775390625e-08f);
+            o[k] = tasr_logf(acc + 5.9604644775390625e-08f);
         }
     }
 }
@@ -630,7 +639,23 @@ static void nc0_job(void *p, int b, int e, int w)
         float *o = j->out + (size_t)ch * (f1 + 2);
         o[0] = 0.f;
         o[f1 + 1] = 0.f;
-        for (int f = 0; f < f1; f++) {
+        int f = 0;
+        for (; f + 4 <= f1; f += 4) {   // four output positions at a time: independent chains hide the FPU latency; each output keeps its own evaluation order
+            const float *a0 = &j->P[0][2 * f], *a1 = &j->P[1][2 * f], *a2 = &j->P[2][2 * f];
+            float c0 = bias, c1 = bias, c2 = bias, c3 = bias;
+#define NC0_TAP(W_, A_, K_) c0 += W_ * A_[K_]; c1 += W_ * A_[(K_) + 2]; c2 += W_ * A_[(K_) + 4]; c3 += W_ * A_[(K_) + 6]
+            NC0_TAP(w0, a0, 0); NC0_TAP(w1, a0, 1); NC0_TAP(w2, a0, 2);
+            NC0_TAP(w3, a1, 0); NC0_TAP(w4, a1, 1); NC0_TAP(w5, a1, 2);
+            NC0_TAP(w6, a2, 0); NC0_TAP(w7, a2, 1); NC0_TAP(w8, a2, 2);
+#undef NC0_TAP
+            const float v0 = c0 > 0.f ? c0 : 0.f, v1 = c1 > 0.f ? c1 : 0.f, v2 = c2 > 0.f ? c2 : 0.f, v3 = c3 > 0.f ? c3 : 0.f;
+            o[1 + f] = v0; o[2 + f] = v1; o[3 + f] = v2; o[4 + f] = v3;
+            cm[1 + f] = v0 > cm[1 + f] ? v0 : cm[1 + f];
+            cm[2 + f] = v1 > cm[2 + f] ? v1 : cm[2 + f];
+            cm[3 + f] = v2 > cm[3 + f] ? v2 : cm[3 + f];
+            cm[4 + f] = v3 > cm[4 + f] ? v3 : cm[4 + f];
+        }
+        for (; f < f1; f++) {
             const float *p0 = &j->P[0][2 * f], *p1 = &j->P[1][2 * f], *p2 = &j->P[2][2 * f];
             float acc = bias + w0 * p0[0] + w1 * p0[1] + w2 * p0[2] + w3 * p1[0] + w4 * p1[1] + w5 * p1[2] + w6 * p2[0] +
                         w7 * p2[1] + w8 * p2[2];
@@ -711,7 +736,13 @@ static void nsilu_job(void *p, int b, int e, int w)
 {
     (void)w;
     float *x = (float *)p;
-    for (int i = b; i < e; i++) x[i] = x[i] * nsig(x[i]);
+    int i = b;
+    for (; i + 4 <= e; i += 4) {   // four independent elements per iteration (same arithmetic per element, shorter dependency chains)
+        const float a0 = x[i], a1 = x[i + 1], a2 = x[i + 2], a3 = x[i + 3];
+        const float s0 = nsig(a0), s1 = nsig(a1), s2 = nsig(a2), s3 = nsig(a3);
+        x[i] = a0 * s0; x[i + 1] = a1 * s1; x[i + 2] = a2 * s2; x[i + 3] = a3 * s3;
+    }
+    for (; i < e; i++) x[i] = x[i] * nsig(x[i]);
 }
 static void nsilu(float *x, int n)
 {
@@ -737,7 +768,7 @@ static void nq_job(void *p, int b, int e, int w)
 #define RNNT_P 320
 #define RNNT_MAXSYM 5
 #define RNNT_B 8  // joint-network frames evaluated per pass (see rnnt_greedy)
-static float nsigm(float x) { return 1.0f / (1.0f + expf(-x)); }
+static float nsigm(float x) { return tasr_sigmoidf(x); }
 typedef struct {
     float h[RNNT_P], c[RNNT_P], gp[RNNT_P];
 } rnnt_state_t;
@@ -751,9 +782,9 @@ static void rnnt_pred_step(const tasr_nemo_t *m, nctx_t *C, const float *xin, rn
     nqlin(C, &m->r_hh, 1, gh, 4 * P);
     for (int j = 0; j < P; j++) {  // PyTorch gate order i, f, g, o
         const float i = nsigm(gi[j] + gh[j]), f = nsigm(gi[P + j] + gh[P + j]);
-        const float g = tanhf(gi[2 * P + j] + gh[2 * P + j]), o = nsigm(gi[3 * P + j] + gh[3 * P + j]);
+        const float g = tasr_tanhf(gi[2 * P + j] + gh[2 * P + j]), o = nsigm(gi[3 * P + j] + gh[3 * P + j]);
         st->c[j] = f * st->c[j] + i * g;
-        st->h[j] = o * tanhf(st->c[j]);
+        st->h[j] = o * tasr_tanhf(st->c[j]);
     }
     nquant(C, st->h, 1, P, P, m->r_jpred.kp);
     nqlin(C, &m->r_jpred, 1, st->gp, P);
@@ -827,6 +858,7 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
 {
     nsig_init();
     nexp_init();
+    tasr_fast_init();
     if (n < 2 * HOP) { if (maxlen) text[0] = 0; return 0; }
     const int d = m->d, H = m->h, dh = m->dh, dhp = m->dhp, sc = m->sc, f1 = m->f1, f2 = m->f2;
     int T0;
@@ -834,7 +866,8 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
     float *F = nemo_features(m, pcm, n, &T0);
     NE(tf, N_FEAT);
     ndbg("feat", 0, F, (size_t)T0 * NMEL);
-    const int T1 = (T0 - 1) / 2 + 1, T = (T1 - 1) / 2 + 1;
+    const int T1 = (T0 - 1) / 2 + 1, Ts = (T1 - 1) / 2 + 1;   // Ts: 40 ms frames after the striding convolutions
+    const int T = m->stack == 2 ? (Ts + 1) / 2 : Ts;           // encoder frames (80 ms when stacked)
     nctx_t C;
     memset(&C, 0, sizeof(C));
     C.m = m; C.T = T;
@@ -853,7 +886,7 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
         C.wtmp[w] = (int8_t *)tasr_alloc(16 * C.ldq + 16, 1);
         C.acc[w] = (int32_t *)tasr_alloc(sizeof(int32_t) * 64 * 16, 1);
     }
-    float *x = (float *)tasr_alloc(sizeof(float) * (size_t)T * d, 0);
+    float *x = (float *)tasr_alloc(sizeof(float) * (size_t)(Ts + 1) * d, 0);   // one spare row: zero pad for an odd number of frames
     // ---- striding conv subsampling, pipelined over output frames
     {
         float *ring = (float *)tasr_alloc(sizeof(float) * 3 * sc * (f1 + 2), 0);  // conv0 rows (r % 3), padded
@@ -868,7 +901,7 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
         float *cmaxr = (float *)tasr_alloc(sizeof(float) * 3 * (f1 + 2), 1);  // per ring row: max over channels
         float *cmw = (float *)tasr_alloc(sizeof(float) * NW * (f1 + 2), 1);
         int have = -1, nflat = 0, t_flat0 = 0;
-        for (int t2 = 0; t2 < T; t2++) {
+        for (int t2 = 0; t2 < Ts; t2++) {
             for (int r = 2 * t2 - 1; r <= 2 * t2 + 1; r++) {  // conv0 output rows needed
                 if (r < 0 || r >= T1 || r <= have) continue;
                 NB(tc0);
@@ -908,7 +941,7 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
                 NPAR(6, nim_job, &j, f2);
             }
             NE(tim, N_IM2COL);
-            if (++nbat < C2B && t2 < T - 1) continue;
+            if (++nbat < C2B && t2 < Ts - 1) continue;
             {   // conv2 GEMM on nbat * f2 patch rows
                 int8_t *save = C.xq;
                 int ld = C.ldq;
@@ -929,7 +962,7 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
                                 xs_sub + nflat);
                 NE(tq, N_QUANT);
                 nflat++;
-                if (nflat == RB || tt == T - 1) {
+                if (nflat == RB || tt == Ts - 1) {
                     int8_t *save = C.xq;
                     float *save_s = C.xs;
                     int ld = C.ldq;
@@ -947,8 +980,23 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
     tasr_free(F);
     tasr_free(xq_sub);
     const float xscale = sqrtf((float)d);
-    for (int i = 0; i < T * d; i++) x[i] *= xscale;
-    ndbg("sub", 0, x, (size_t)T * d);
+    for (int i = 0; i < Ts * d; i++) x[i] *= xscale;
+    ndbg("sub", 0, x, (size_t)Ts * d);
+    if (m->stack == 2) {   // 80 ms frames: x'[i] = W [x[2i]; x[2i+1]] + b, the two rows are adjacent in memory (zero row after an odd tail)
+        memset(x + (size_t)Ts * d, 0, sizeof(float) * d);
+        const int kps = m->stk.kp;
+        float *tmp = (float *)tasr_alloc(sizeof(float) * (size_t)RB * d, 0);
+        for (int r0 = 0; r0 < T; r0 += RB) {
+            const int rn = T - r0 < RB ? T - r0 : RB;
+            NB(tq2);
+            tasr_quant_rows(x + (size_t)r0 * 2 * d, rn, 2 * d, 2 * d, C.xq, C.ldq, kps, C.xs);
+            NE(tq2, N_QUANT);
+            nqlin(&C, &m->stk, rn, tmp, d);
+            memcpy(x + (size_t)r0 * d, tmp, sizeof(float) * (size_t)rn * d);
+        }
+        tasr_free(tmp);
+        ndbg("stack", 0, x, (size_t)T * d);
+    }
     // ---- relative positional encodings (int8, shared by all layers before linear_pos)
     const int NP = 2 * T - 1;
     C.Tp = (T + 15) & ~15;
@@ -1157,14 +1205,21 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
             if (logit_sink && nf < max_frames) memcpy(logit_sink + (size_t)nf * V1, l, sizeof(float) * V1);
             nf++;
             int best = 0;
-            float bv = l[0];
-            for (int v = 1; v < V1; v++) if (l[v] > bv) { bv = l[v]; best = v; }
+            float bv = l[0], b2 = -3.0e38f;
+            for (int v = 1; v < V1; v++) {
+                if (l[v] > bv) { b2 = bv; bv = l[v]; best = v; }
+                else if (l[v] > b2) b2 = l[v];
+            }
             if (dec) {
-                float z = 0.f;
-                for (int v = 0; v < V1; v++) z += expf(l[v] - bv);
-                const float lz = bv + logf(z);
-                lp[0] = l[m->V] - lz;
-                for (int v = 0; v < m->V; v++) lp[v + 1] = l[v] - lz;
+                if (best == m->V && bv - b2 >= NBLANK_MARGIN) {
+                    lp[0] = 0.f;   // blank-dominated frame: only lp[0] is read (see s_emit)
+                } else {
+                    float z = 0.f;
+                    for (int v = 0; v < V1; v++) z += tasr_fast_expneg(bv - l[v]);
+                    const float lz = bv + tasr_logf(z);
+                    lp[0] = l[m->V] - lz;
+                    for (int v = 0; v < m->V; v++) lp[v + 1] = l[v] - lz;
+                }
                 tasr_decoder_step(dec, lp);
             } else if (best != prev && best != m->V && maxlen) {
                 const int nl = m->tok_len[best];
@@ -1210,7 +1265,7 @@ int tasr_nemo_transcribe(const tasr_nemo_t *m, const int16_t *pcm, int n, tasr_d
 
 struct tasr_nemo_stream {
     const tasr_nemo_t *m;
-    int C, nl, Lc, Lcp, OMAX, NP, halo;
+    int C, Cs, nl, Lc, Lcp, OMAX, NP, halo;   // C: encoder frames per chunk, Cs = C * stack: front-end frames per chunk
     int8_t *p8;   // [layers][H][NP][dhp] positional rows, row r <-> relative offset OMAX - r
     float *sp;    // [layers][H][NP]
     int8_t *k8;   // [layers][H][Lc][dhp]
@@ -1229,7 +1284,8 @@ struct tasr_nemo_stream {
     float *c2out, *fr, *xs_sub;
     int8_t *xq_sub;
     int nbat, nflat, t_chunk;
-    float *x;      // [C][d]
+    float *x;      // [Cs + 1][d] front-end frames of the chunk (the encoder reads the stacked rows, see s_run_chunk)
+    float *x2;     // [C][d] stacked frames (stack == 2)
     // work
     nctx_t W;
     float *hb, *h2, *att, *prow, *squ, *sqv;
@@ -1282,7 +1338,7 @@ static void smel_job(void *p, int b, int e, int w)
             const float *pp = pw + m->mel_start[q];
             for (int r = 0; r < m->mel_len[q]; r++) acc += pp[r] * wm[r];
             wm += m->mel_len[q];
-            o[q] = (logf(acc + 5.9604644775390625e-08f) - m->nmean[q]) * (1.0f / m->nstd[q]);
+            o[q] = (tasr_logf(acc + 5.9604644775390625e-08f) - m->nmean[q]) * (1.0f / m->nstd[q]);
         }
     }
 }
@@ -1360,14 +1416,23 @@ static void s_emit(struct tasr_nemo_stream *s, const float *l)
     const int V1 = m->V + 1;
     if (s->sink && s->frames < s->sink_max) memcpy(s->sink + (size_t)s->frames * V1, l, sizeof(float) * V1);
     int best = 0;
-    float bv = l[0];
-    for (int v = 1; v < V1; v++) if (l[v] > bv) { bv = l[v]; best = v; }
+    float bv = l[0], b2 = -3.0e38f;   // best and second best logit
+    for (int v = 1; v < V1; v++) {
+        if (l[v] > bv) { b2 = bv; bv = l[v]; best = v; }
+        else if (l[v] > b2) b2 = l[v];
+    }
     if (s->dec) {
-        float z = 0.f;
-        for (int v = 0; v < V1; v++) z += expf(l[v] - bv);
-        const float lz = bv + logf(z);
-        s->lp[0] = l[m->V] - lz;
-        for (int v = 0; v < m->V; v++) s->lp[v + 1] = l[v] - lz;
+        if (best == m->V && bv - b2 >= NBLANK_MARGIN) {
+            // blank by a wide margin: p(blank) > 0.999, the decoder only reads lp[0] on such a frame (see tasr_decoder_step),
+            // so the 1025 exponentials of the log-softmax are skipped
+            s->lp[0] = 0.f;
+        } else {
+            float z = 0.f;
+            for (int v = 0; v < V1; v++) z += tasr_fast_expneg(bv - l[v]);
+            const float lz = bv + tasr_logf(z);
+            s->lp[0] = l[m->V] - lz;
+            for (int v = 0; v < m->V; v++) s->lp[v + 1] = l[v] - lz;
+        }
         tasr_decoder_step(s->dec, s->lp);
     } else if (best != s->prev && best != m->V) {
         const int nl = m->tok_len[best];
@@ -1475,8 +1540,10 @@ static void s_encode_chunk(struct tasr_nemo_stream *s, int n)
     s->nk = k0 + n;
     NB(thd);
     s_qlin_rows(s, &m->head, x, n, d, s->lg, m->V + 1);
-    for (int t = 0; t < n; t++) s_emit(s, s->lg + (size_t)t * (m->V + 1));
     NE(thd, N_HEAD);
+    NB(tde);
+    for (int t = 0; t < n; t++) s_emit(s, s->lg + (size_t)t * (m->V + 1));   // log-softmax, greedy path, beam search with the LM
+    NE(tde, N_DEC);
     s->t_chunk += n;
 }
 
@@ -1548,8 +1615,24 @@ static void s_run_chunk(struct tasr_nemo_stream *s)
     s->W.xq = save; s->W.ldq = ld; s->W.xs = save_s;
     const float xscale = sqrtf((float)m->d);
     for (int i = 0; i < s->nflat * m->d; i++) s->x[i] *= xscale;
-    const int n = s->nflat;
+    int n = s->nflat;
     s->nflat = 0;
+    if (m->stack == 2) {   // pairs of 40 ms frames -> one 80 ms frame (an odd tail only happens at the end of the stream)
+        const int d = m->d, kps = m->stk.kp;
+        if (n & 1) memset(s->x + (size_t)n * d, 0, sizeof(float) * d);
+        n = (n + 1) / 2;
+        int8_t *save = s->W.xq;
+        NB(tq2);
+        tasr_quant_rows(s->x, n, 2 * d, 2 * d, s->W.xq, s->W.ldq, kps, s->W.xs);
+        NE(tq2, N_QUANT);
+        nqlin(&s->W, &m->stk, n, s->x2, d);
+        s->W.xq = save;
+        float *sx = s->x;
+        s->x = s->x2;
+        s_encode_chunk(s, n);
+        s->x = sx;
+        return;
+    }
     s_encode_chunk(s, n);
 }
 // advance the front end as far as the available audio allows (or to the end after finish)
@@ -1593,8 +1676,8 @@ static void s_advance(struct tasr_nemo_stream *s)
         NE(tim, N_IM2COL);
         s->t2_next++;
         const int C2B = RB / f2 < 1 ? 1 : RB / f2;
-        if (++s->nbat == C2B || s->nflat + s->nbat == s->C) s_flush_conv2(s);
-        if (s->nflat == s->C) s_run_chunk(s);
+        if (++s->nbat == C2B || s->nflat + s->nbat == s->Cs) s_flush_conv2(s);
+        if (s->nflat == s->Cs) s_run_chunk(s);
     }
 }
 
@@ -1603,13 +1686,15 @@ tasr_nemo_stream_t *tasr_nemo_stream_new(const tasr_nemo_t *m, int chunk, int le
     if (!m || !m->nmean || m->rnnt) return NULL;  // needs a streaming-trained CTC model (fixed normalization)
     nsig_init();
     nexp_init();
+    tasr_fast_init();
     struct tasr_nemo_stream *s = (struct tasr_nemo_stream *)tasr_alloc(sizeof(*s), 0);
     if (!s) return NULL;
     memset(s, 0, sizeof(*s));
     const int d = m->d, H = m->h, dh = m->dh, dhp = m->dhp, nly = m->nl, f1 = m->f1, f2 = m->f2, sc = m->sc;
     s->m = m;
-    s->C = chunk > 0 ? chunk : (m->s_chunk > 0 ? m->s_chunk : 16);
-    if (s->C > RB) s->C = RB;
+    s->C = chunk > 0 ? chunk : (m->s_chunk > 0 ? m->s_chunk : (m->stack == 2 ? 8 : 16));
+    if (s->C * m->stack > RB) s->C = RB / m->stack;
+    s->Cs = s->C * m->stack;
     const int lf = left > 0 ? left : (m->s_left > 0 ? m->s_left : 128);
     s->nl = (lf + s->C - 1) / s->C;
     s->Lc = (s->nl + 1) * s->C;
@@ -1626,28 +1711,32 @@ tasr_nemo_stream_t *tasr_nemo_stream_new(const tasr_nemo_t *m, int chunk, int le
     s->sv = (float *)tasr_alloc(sizeof(float) * nly * H * s->Lc, 0);
     s->gh = (float *)tasr_alloc(sizeof(float) * nly * (2 * s->halo + s->C) * d, 0);
     s->mel = (float *)tasr_alloc(sizeof(float) * SMEL * NMEL, 1);
-    s->c0ring = (float *)tasr_alloc(sizeof(float) * 3 * sc * (f1 + 2), 0);
+    s->c0ring = (float *)tasr_alloc(sizeof(float) * 3 * sc * (f1 + 2), 1);   // hot when it fits internal RAM (light front end)
     s->cmaxr = (float *)tasr_alloc(sizeof(float) * 3 * (f1 + 2), 1);
     s->cmw = (float *)tasr_alloc(sizeof(float) * NW * (f1 + 2), 1);
     const int C2B = RB / f2 < 1 ? 1 : RB / f2;
-    s->col = (int8_t *)tasr_alloc((size_t)C2B * f2 * m->c2.kp, 0);
-    s->c2out = (float *)tasr_alloc(sizeof(float) * C2B * f2 * sc, 0);
+    s->col = (int8_t *)tasr_alloc((size_t)C2B * f2 * m->c2.kp, 1);      // activation tile of the conv2 GEMM
+    s->c2out = (float *)tasr_alloc(sizeof(float) * C2B * f2 * sc, 1);
     s->fr = (float *)tasr_alloc(sizeof(float) * sc * f2, 0);
-    s->xq_sub = (int8_t *)tasr_alloc((size_t)s->C * m->sub.kp, 0);
+    s->xq_sub = (int8_t *)tasr_alloc((size_t)s->Cs * m->sub.kp, 0);
     s->xs_sub = (float *)tasr_alloc(sizeof(float) * RB, 1);
-    s->x = (float *)tasr_alloc(sizeof(float) * s->C * d, 0);
+    s->x = (float *)tasr_alloc(sizeof(float) * (s->Cs + 1) * d, 1);
+    if (m->stack == 2) s->x2 = (float *)tasr_alloc(sizeof(float) * s->C * d, 1);
     s->W.m = m;
     s->W.ldq = m->ff > 2 * d ? m->ff : 2 * d;
-    s->W.xq = (int8_t *)tasr_alloc((size_t)RB * s->W.ldq, 1);
+    const int wrows = s->C > 16 ? s->C : 16;   // layer work rows: at most one chunk (the positional-row setup below works in blocks of wrows)
+    s->W.xq = (int8_t *)tasr_alloc((size_t)wrows * s->W.ldq, 1);
     s->W.xs = (float *)tasr_alloc(sizeof(float) * RB, 1);
     for (int w = 0; w < NW; w++) {
         s->W.wtmp[w] = (int8_t *)tasr_alloc(16 * s->W.ldq + 16, 1);
         s->W.acc[w] = (int32_t *)tasr_alloc(sizeof(int32_t) * 64 * 16, 1);
     }
-    s->hb = (float *)tasr_alloc(sizeof(float) * RB * d, 1);
+    s->hb = (float *)tasr_alloc(sizeof(float) * (size_t)wrows * d, 1);
     const int w2 = 3 * d > m->ff ? 3 * d : m->ff;
-    s->h2 = (float *)tasr_alloc(sizeof(float) * RB * w2, 0);
-    s->att = (float *)tasr_alloc(sizeof(float) * s->C * d, 0);
+    // per-chunk work buffers hold at most C rows: sized for the chunk they fit internal SRAM (hot kind), where the elementwise
+    // passes (SiLU, quantisation, layer norm) run without external-memory stalls
+    s->h2 = (float *)tasr_alloc(sizeof(float) * (size_t)s->C * w2, 1);
+    s->att = (float *)tasr_alloc(sizeof(float) * s->C * d, 1);
     s->prow = (float *)tasr_alloc(sizeof(float) * RB * d, 0);
     s->qu = (int8_t *)tasr_alloc((size_t)H * s->C * dhp, 0);
     s->qv = (int8_t *)tasr_alloc((size_t)H * s->C * dhp, 0);
@@ -1665,8 +1754,8 @@ tasr_nemo_stream_t *tasr_nemo_stream_new(const tasr_nemo_t *m, int chunk, int le
     // positional rows for offsets OMAX..-(C-1), int8 once, then every layer's linear_pos per head
     const int kpp = m->L[0].pos.kp;
     float *pe = (float *)tasr_alloc(sizeof(float) * RB * d, 0);
-    for (int r0 = 0; r0 < s->NP; r0 += RB) {
-        const int rn = s->NP - r0 < RB ? s->NP - r0 : RB;
+    for (int r0 = 0; r0 < s->NP; r0 += wrows) {
+        const int rn = s->NP - r0 < wrows ? s->NP - r0 : wrows;
         for (int r = 0; r < rn; r++) {
             const double off = (double)(s->OMAX - (r0 + r));
             for (int i = 0; i < d / 2; i++) {
@@ -1769,7 +1858,7 @@ void tasr_nemo_stream_free(tasr_nemo_stream_t *s)
 {
     if (!s) return;
     void *p[] = {s->p8, s->sp, s->k8, s->sk, s->vt, s->sv, s->gh, s->mel, s->c0ring, s->cmaxr, s->cmw, s->col, s->c2out,
-                 s->fr, s->xq_sub, s->xs_sub, s->x, s->W.xq, s->W.xs, s->hb, s->h2, s->att, s->prow, s->qu, s->qv,
+                 s->fr, s->xq_sub, s->xs_sub, s->x, s->x2, s->W.xq, s->W.xs, s->hb, s->h2, s->att, s->prow, s->qu, s->qv,
                  s->squ, s->sqv, s->lg, s->lp};
     for (size_t i = 0; i < sizeof(p) / sizeof(p[0]); i++) if (p[i]) tasr_free(p[i]);
     for (int w = 0; w < NW; w++) {

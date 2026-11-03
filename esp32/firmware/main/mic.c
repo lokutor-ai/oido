@@ -72,7 +72,7 @@ static void mic_start(void)
 #endif
 
 // Utterance mode for the NeMo engine: record while speech is detected (max 20 s), transcribe after 0.6 s of silence.
-void run_mic_nemo(const tasr_nemo_t *m, struct tasr_decoder *dec)
+void run_mic_nemo(const tasr_nemo_t *m, struct tasr_decoder *dec, tasr_nemo_stream_t *st_pre)
 {
 #ifdef CONFIG_TASR_MODE_MIC
     mic_start();
@@ -87,7 +87,7 @@ void run_mic_nemo(const tasr_nemo_t *m, struct tasr_decoder *dec)
     char idle[32] = "* listening";
     oled_status(idle);
     int hearing = 0;
-    tasr_nemo_stream_t *st = tasr_nemo_stream_new(m, 0, 0, dec);
+    tasr_nemo_stream_t *st = st_pre ? st_pre : tasr_nemo_stream_new(m, CONFIG_TASR_STREAM_CHUNK, CONFIG_TASR_STREAM_LEFT, dec);   // st_pre: created before the weights were placed
     if (st) {  // streaming model: the encoder runs while you speak; only the last chunk is left when you stop
         printf("ready (streaming): speak, partial text follows you, the final line prints after each pause\n");
         int fed = 0;

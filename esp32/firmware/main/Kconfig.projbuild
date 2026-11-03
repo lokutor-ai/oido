@@ -31,6 +31,19 @@ menu "tinyasr"
             spoken, so the delay of the final text after the end of speech includes any backlog if the chip is slower
             than real time.
 
+    config TASR_STREAM_ONLY
+        bool "File-mode benchmark: streaming pass only, streaming state first, weights get the rest of PSRAM"
+        default n
+
+    config TASR_PSRAM_RESERVE_KB
+        int "Stream-only benchmark: PSRAM (KB) kept free after the weights are placed (900 = what the live-microphone mode needs for the ring and the 20 s recording buffer)"
+        default 300
+        depends on TASR_STREAM_ONLY
+
+    config TASR_EXP_NO_WPF
+        bool "Experiment: no weight preload into the D-cache (kernels.c tasr_wpf = 0)"
+        default n
+
     config TASR_EXP_NO_PSRAM_WEIGHTS
         bool "Experiment: keep all weights in flash (no copies in PSRAM)"
         default n
@@ -97,6 +110,15 @@ menu "tinyasr"
     config TASR_BEAM
         int "Beam width when an LM partition is present"
         default 4
+    config TASR_STREAM_CHUNK
+        int "Streaming chunk in encoder frames (0 = the model's default: 8 x 80 ms for v2 models, 16 x 40 ms for v1)"
+        default 0
+    config TASR_STREAM_LEFT
+        int "Streaming left context in encoder frames (0 = the model's default)"
+        default 0
+    config TASR_TOPK
+        int "Candidate tokens per frame for the NeMo CTC beam search (6 = published setting; 3 costs ~0.1-0.2 WER and runs ~4x fewer LM steps with beam 2)"
+        default 6
     config TASR_LM_WEIGHT_X100
         int "LM weight x100"
         default 60

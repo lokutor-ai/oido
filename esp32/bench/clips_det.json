@@ -1,0 +1,128 @@
+[
+ {
+  "path": "esp32/bench/b00.wav",
+  "ref": "case and we will seriously review every bit of it court is in recess thank",
+  "dur": 5.13,
+  "id": "peoples-speech-clean-89be6571d920574a",
+  "host_hyp": "case and we will seriously review every bit of it courts in recess"
+ },
+ {
+  "path": "esp32/bench/b01.wav",
+  "ref": "without going on bonk on the threshold issue of does the st amendment apply to non expressive conduct",
+  "dur": 7.42,
+  "id": "peoples-speech-clean-046589dc48eb0dec",
+  "host_hyp": "without going on bonk on the threshold issue of does the first amendment apply to non expressive conduct"
+ },
+ {
+  "path": "esp32/bench/b02.wav",
+  "ref": "rival gang play basketball and that that put him in some personal the hearing weapons",
+  "dur": 6.66,
+  "id": "peoples-speech-clean-6ee36fe79becc019",
+  "host_hyp": "rival gang play basketball and that that put him in some personal curing weapons"
+ },
+ {
+  "path": "esp32/bench/b03.wav",
+  "ref": "he is fluent in french and russian",
+  "dur": 5.436,
+  "id": "commonvoice17-en-30d59f22f434a21b",
+  "host_hyp": "he is fluent in france and russian"
+ },
+ {
+  "path": "esp32/bench/b04.wav",
+  "ref": "yet it remains a celebrated case nonetheless",
+  "dur": 4.296,
+  "id": "commonvoice17-en-826901a2266647ef",
+  "host_hyp": "yet it remains a celebrated case nonetheless"
+ },
+ {
+  "path": "esp32/bench/b05.wav",
+  "ref": "this is best done in the spring when disturbed plants can recover",
+  "dur": 8.64,
+  "id": "commonvoice17-en-3dba1f93cc211a12",
+  "host_hyp": "this is best done in the spring when disturbed plants can recover"
+ },
+ {
+  "path": "esp32/bench/b06.wav",
+  "ref": "to put it very bluntly the people of this planet must destroy capitalism before capitalism destroys our planet",
+  "dur": 7.659,
+  "id": "20131024-0900-PLENARY-11-en_20131024-12:39:41_12",
+  "host_hyp": "very bluntly put the people of this planet must destroy capitalism before capitalism destroys our planet"
+ },
+ {
+  "path": "esp32/bench/b07.wav",
+  "ref": "last year this parliament by adopting a similar amendment achieved an important success in the field of human rights",
+  "dur": 7.46,
+  "id": "20121212-0900-PLENARY-11-en_20121212-16:39:38_3",
+  "host_hyp": "last year this parliament by adopting a similar amendment achieved an important success in the field of human rights"
+ },
+ {
+  "path": "esp32/bench/b08.wav",
+  "ref": "there are political prisoners in spain and so i am asking you do we really accept that eu governments repress political dissent through arbitrary detention",
+  "dur": 9.698,
+  "id": "20180314-0900-PLENARY-5-en_20180314-11:37:06_3",
+  "host_hyp": "there are political prisoners in spain and so i am asking you do we really accept that eu governments repress political dissent through arbitrary detention"
+ },
+ {
+  "path": "esp32/bench/b09.wav",
+  "ref": "but is it possible to use both the the plastic and so uh soft things and t p titanium as well",
+  "dur": 7.12,
+  "id": "ami-ihm-cd7b647bcec56488",
+  "host_hyp": "but is it possible to use both the the plastic and soft things and detainum as well"
+ },
+ {
+  "path": "esp32/bench/b10.wav",
+  "ref": "is a ar are they also like lizards or are they yeah they are mm hmm",
+  "dur": 5.2,
+  "id": "ami-ihm-47fadddd7cff1010",
+  "host_hyp": "is are they also like lizards or are they yeah they are"
+ },
+ {
+  "path": "esp32/bench/b11.wav",
+  "ref": "but how do we know how much uh i mean how much do we have per how much",
+  "dur": 8.5,
+  "id": "ami-ihm-3e38c380b434944c",
+  "host_hyp": "but how do we know how much i mean how much do we have per how much"
+ },
+ {
+  "path": "esp32/bench/b12.wav",
+  "ref": "grace be to you and peace from god the father and from our lord jesus christ",
+  "dur": 5.54,
+  "id": "2830-3980-0038",
+  "host_hyp": "grace be to you and peace from god to father and from our lord jesus christ"
+ },
+ {
+  "path": "esp32/bench/b13.wav",
+  "ref": "this reality begins to explain the dark power and otherworldly fascination of twenty thousand leagues under the seas",
+  "dur": 7.805,
+  "id": "8463-294825-0001",
+  "host_hyp": "this reality begins to explain the dark power and other worldly fascination of twenty thousand leagues under the seas"
+ },
+ {
+  "path": "esp32/bench/b14.wav",
+  "ref": "as for the ichthyosaurus has he returned to his submarine cavern",
+  "dur": 5.06,
+  "id": "260-123286-0031",
+  "host_hyp": "as for the athesaurus has he returned to his submarine cavern"
+ },
+ {
+  "path": "esp32/bench/b15.wav",
+  "ref": "there was no reply but the sound of hurrying steps came quicker and quicker now and then they were interrupted by a groan",
+  "dur": 8.01,
+  "id": "8188-269288-0056",
+  "host_hyp": "there was no reply but the sound of hurrying steps came quicker and quicker now and then they were interrupted by a groan"
+ },
+ {
+  "path": "esp32/bench/b16.wav",
+  "ref": "for ned was so absorbed in business that he ignored the whole bailey question and left them in utter darkness",
+  "dur": 6.34,
+  "id": "3331-159609-0023",
+  "host_hyp": "for ned was so absorbed in business that he ignored the whole bailey question and left them in other darkness"
+ },
+ {
+  "path": "esp32/bench/b17.wav",
+  "ref": "in this way it is also that orange and lemon chips are preserved",
+  "dur": 4.205,
+  "id": "3538-142836-0013",
+  "host_hyp": "in this way it is also that orange and lemonships are preserved"
+ }
+]

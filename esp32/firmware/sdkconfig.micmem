@@ -1,0 +1,2 @@
+# stream-only benchmark with the PSRAM headroom of the live-microphone mode: 256 KB ring + 640 KB (20 s) recording buffer
+CONFIG_TASR_PSRAM_RESERVE_KB=900

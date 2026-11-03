@@ -86,7 +86,11 @@ static void par_for(tasr_job_fn fn, void *ctx, int n)
 #endif
 #define CPU_HZ 240000000.0
 
+#ifdef CONFIG_TASR_MODE_MIC
 #define INTERNAL_RESERVE (72 * 1024)  // keep internal RAM for I2S DMA, Wi-Fi/BLE stacks, task stacks
+#else
+#define INTERNAL_RESERVE (24 * 1024)  // file-mode benchmark: no radio, no I2S
+#endif
 static void *fw_alloc(size_t n, int kind)
 {
     void *p = NULL;
@@ -135,7 +139,7 @@ static void run_nemo(const uint8_t *blob, uint32_t blob_size)
         tasr_lm_t *lm = tasr_lm_load(lmp + 16, lbytes);
         if (lm) {
             size_t mv = tasr_lm_to_ram(lm);
-            dec = tasr_decoder_create(lm, 1025, CONFIG_TASR_BEAM, 6, tasr_lm_weight(lm, CONFIG_TASR_LM_WEIGHT_X100 / 100.0f),
+            dec = tasr_decoder_create(lm, 1025, CONFIG_TASR_BEAM, CONFIG_TASR_TOPK, tasr_lm_weight(lm, CONFIG_TASR_LM_WEIGHT_X100 / 100.0f),
                                       tasr_lm_bonus(lm, CONFIG_TASR_TOKEN_BONUS_X100 / 100.0f));
             ESP_LOGI(TAG, "LM %u bytes in PSRAM, beam %d", (unsigned)mv, CONFIG_TASR_BEAM);
         }
@@ -147,8 +151,24 @@ static void run_nemo(const uint8_t *blob, uint32_t blob_size)
     const size_t reserve = 2700000;  // per-utterance buffers for clips up to 20 s (1.9 MB measured at 15 s)
 #endif
     const int streaming = tasr_nemo_stream_supported(m);
+#if defined(CONFIG_TASR_MODE_MIC)
+    // live microphone with a streaming model: the streaming state is allocated first, then the 20 s utterance buffer and the
+    // microphone ring keep ~0.8 MB, and the weights get the rest of PSRAM (a small model lives entirely in PSRAM)
+    tasr_nemo_stream_t *st_early = streaming ? tasr_nemo_stream_new(m, CONFIG_TASR_STREAM_CHUNK, CONFIG_TASR_STREAM_LEFT, dec) : NULL;
+    free_ps = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    size_t budget = !streaming ? (free_ps > reserve ? free_ps - reserve : 0) : (free_ps > 900000 ? free_ps - 900000 : 0);
+#elif defined(CONFIG_TASR_STREAM_ONLY)
+    // streaming-only deployment: the streaming state (caches, positional rows, buffers) is allocated first and the weights
+    // take what is left of PSRAM, so a small model lives entirely in PSRAM (89 MB/s) instead of partly in flash (32 MB/s)
+    tasr_nemo_stream_t *st_early = streaming ? tasr_nemo_stream_new(m, CONFIG_TASR_STREAM_CHUNK, CONFIG_TASR_STREAM_LEFT, dec) : NULL;
+    free_ps = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    const size_t keep = (size_t)CONFIG_TASR_PSRAM_RESERVE_KB * 1000;
+    size_t budget = free_ps > keep ? free_ps - keep : 0;
+    (void)reserve;
+#else
     // a streaming model also keeps its attention / conv caches and positional rows (~2 MB at chunk 16, left 128)
     size_t budget = free_ps > reserve + (streaming ? 2200000 : 0) ? free_ps - reserve - (streaming ? 2200000 : 0) : 0;
+#endif
 #ifdef CONFIG_TASR_EXP_NO_PSRAM_WEIGHTS
     budget = 0;
 #endif
@@ -157,8 +177,8 @@ static void run_nemo(const uint8_t *blob, uint32_t blob_size)
              (unsigned)tasr_nemo_weight_bytes(m), (unsigned)moved, (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 #ifdef CONFIG_TASR_MODE_MIC
-    extern void run_mic_nemo(const tasr_nemo_t *m, struct tasr_decoder *dec);
-    run_mic_nemo(m, dec);
+    extern void run_mic_nemo(const tasr_nemo_t *m, struct tasr_decoder *dec, tasr_nemo_stream_t *st_pre);
+    run_mic_nemo(m, dec, st_early);
 #endif
     size_t asize = 0;
     const uint8_t *aud = map_partition(0x41, "audio", &asize);
@@ -168,7 +188,13 @@ static void run_nemo(const uint8_t *blob, uint32_t blob_size)
     const uint8_t *p = aud + 8;
     double tot_audio = 0, tot_cycles = 0, tot_fin = 0, tot_wall = 0, tot_fin_wall = 0;
     static char text[4096];
-    tasr_nemo_stream_t *st = streaming ? tasr_nemo_stream_new(m, 0, 0, dec) : NULL;
+#if defined(CONFIG_TASR_STREAM_ONLY) && !defined(CONFIG_TASR_MODE_MIC)
+    tasr_nemo_stream_t *st = st_early;
+#else
+    tasr_nemo_stream_t *st = streaming ? tasr_nemo_stream_new(m, CONFIG_TASR_STREAM_CHUNK, CONFIG_TASR_STREAM_LEFT, dec) : NULL;
+#endif
+    uint64_t sprof[24] = {0}, spre[24];   // per-stage cycles of the streaming runs only (the PROF counters add both modes)
+    double tot_stream_cycles = 0;
     if (streaming) printf("STREAM model: chunk/left defaults, stream %s\n", st ? "ok" : "ALLOCATION FAILED");
     for (uint32_t u = 0; u < n_utt; u++) {
         uint32_t ns, tl;
@@ -178,7 +204,11 @@ static void run_nemo(const uint8_t *blob, uint32_t blob_size)
         p = (const uint8_t *)(pcm + ns + (ns & 1));
         uint32_t c0 = esp_cpu_get_cycle_count();
         int64_t w0 = esp_timer_get_time();
+#if defined(CONFIG_TASR_STREAM_ONLY)
+        text[0] = 0;   // streaming-only build: no utterance pass (its buffers do not fit next to a PSRAM-resident model)
+#else
         tasr_nemo_transcribe(m, pcm, ns, dec, text, sizeof(text), NULL, 0, NULL);
+#endif
         const int64_t wall = esp_timer_get_time() - w0;  // 64-bit microseconds: the 32-bit cycle counter wraps every 17.9 s at 240 MHz
         uint32_t cyc = esp_cpu_get_cycle_count() - c0;
         double sec = ns / 16000.0;
@@ -189,6 +219,7 @@ static void run_nemo(const uint8_t *blob, uint32_t blob_size)
                (unsigned)cyc, cyc / CPU_HZ / sec, (long long)wall, wall / 1e6 / sec, (int)tl, ref, text);
         if (st) {  // the same audio arriving in 20 ms blocks; what matters is the compute left after the last block
             tasr_nemo_stream_reset(st);
+            for (int i = 0; i < 24 && tasr_nemo_profile_name(i); i++) spre[i] = tasr_nemo_profile_value(i);
             uint32_t s0 = esp_cpu_get_cycle_count();
             int64_t sw0 = esp_timer_get_time();
             for (uint32_t o = 0; o < ns; o += 320) tasr_nemo_stream_feed(st, pcm + o, ns - o < 320 ? ns - o : 320);
@@ -198,6 +229,8 @@ static void run_nemo(const uint8_t *blob, uint32_t blob_size)
             uint32_t s2 = esp_cpu_get_cycle_count();
             int64_t sw2 = esp_timer_get_time();
             tot_fin += s2 - s1;
+            tot_stream_cycles += (double)(s2 - s0);
+            for (int i = 0; i < 24 && tasr_nemo_profile_name(i); i++) sprof[i] += tasr_nemo_profile_value(i) - spre[i];
             tot_fin_wall += sw2 - sw1;
             printf("STREAM %u | feed cycles %u | finish cycles %u (%.0f ms @240MHz) | RTF %.3f | feed wall %lld us | finish wall %lld us | RTF_wall %.3f\nSHYP: %s\n",
                    (unsigned)u, (unsigned)(s1 - s0), (unsigned)(s2 - s1), (s2 - s1) / CPU_HZ * 1000.0, (s2 - s0) / CPU_HZ / sec,
@@ -229,6 +262,14 @@ static void run_nemo(const uint8_t *blob, uint32_t blob_size)
     for (int i = 0; tasr_nemo_profile_name(i); i++)
         printf("PROF %-10s %12llu cycles %5.1f%%\n", tasr_nemo_profile_name(i), (unsigned long long)tasr_nemo_profile_value(i),
                100.0 * tasr_nemo_profile_value(i) / tot_cycles);
+    if (st) {
+        for (int i = 0; tasr_nemo_profile_name(i); i++)
+            printf("SPROF %-10s %12llu cycles %5.1f%% (streaming only; UPROF %5.1f%% of utterance cycles)\n", tasr_nemo_profile_name(i),
+                   (unsigned long long)sprof[i], 100.0 * sprof[i] / tot_stream_cycles,
+                   100.0 * (tasr_nemo_profile_value(i) - sprof[i]) / tot_cycles);
+        printf("SPROF total stream cycles %.0f over %.1f s of audio = %.1f Mcycles per audio second\n", tot_stream_cycles, tot_audio,
+               tot_stream_cycles / tot_audio / 1e6);
+    }
     printf("DONE\n");
 }
 

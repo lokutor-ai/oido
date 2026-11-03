@@ -8,6 +8,17 @@ typedef struct {
     const float *b;   // [n] bias
 } tasr_qlin_t;
 
+// ESP32-S3: preload the next block of weights into the D-cache in the background while the current one is multiplied
+// (1 = on, default; 0 = off, for comparisons). No effect on the host build.
+extern int tasr_wpf;
+// table-driven exp(-u) (u >= 0), sigmoid and tanh; tasr_fast_init() builds the tables once (idempotent)
+void tasr_fast_init(void);
+float tasr_fast_expneg(float u);
+float tasr_fast_sigmoid(float x);
+float tasr_fast_tanh(float x);
+// float epilogue of an integer tile (see kernels.c)
+void tasr_epilogue_row(float *restrict yo, const int32_t *restrict a, float xst, const float *restrict sw, const float *restrict bb, int n);
+void tasr_epilogue_col(float *restrict yo, int ldy, const int32_t *restrict acc, const float *restrict xs, float sw, float b, int T);
 // out[t] = dot(x + t*ldq, w) for t < T (kp multiple of 16, 16-byte aligned rows)
 void tasr_dot_rows_s8(const int8_t *w, const int8_t *x, int ldq, int T, int kp, int32_t *out);
 // int8 dot product; kp multiple of 16, both pointers 16-byte aligned.

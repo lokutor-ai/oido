@@ -5,6 +5,7 @@
 #include "kernels.h"
 #include "tinyasr.h"
 #include "tinyasr_lm.h"
+#include "tasr_math.h"
 
 #define NEG (-1e30f)
 
@@ -79,7 +80,7 @@ size_t tasr_lm_to_ram(tasr_lm_t *lm)
     return lm_move(&lm->emb) + lm_move(&lm->w_ih) + lm_move(&lm->w_hh) + lm_move(&lm->out);
 }
 
-static inline float fsig(float x) { return 1.0f / (1.0f + expf(-x)); }
+static inline float fsig(float x) { return tasr_fast_sigmoid(x); }
 
 // ---------------------------------------------------------------- decoder
 #define MAXB 16
@@ -177,7 +178,7 @@ static void lm_steps(tasr_decoder_t *d, const int *parent, const int *tok, const
         for (int j = 0; j < H; j++) {
             float r = fsig(gi[j] + gh[j]);
             float z = fsig(gi[H + j] + gh[H + j]);
-            float nn = tanhf(gi[2 * H + j] + r * gh[2 * H + j]);
+            float nn = tasr_fast_tanh(gi[2 * H + j] + r * gh[2 * H + j]);
             h[j] = (1.f - z) * nn + z * hp[j];
         }
         memcpy(d->tmp + (size_t)i * ldt, h, sizeof(float) * H);
@@ -190,8 +191,8 @@ static void lm_steps(tasr_decoder_t *d, const int *parent, const int *tok, const
         float mx = lo[0];
         for (int v = 1; v < V; v++) mx = lo[v] > mx ? lo[v] : mx;
         float sum = 0.f;
-        for (int v = 0; v < V; v++) sum += expf(lo[v] - mx);
-        const float lz = mx + logf(sum);
+        for (int v = 0; v < V; v++) sum += tasr_fast_expneg(mx - lo[v]);
+        const float lz = mx + tasr_logf(sum);
         for (int v = 0; v < V; v++) lp[v] = lo[v] - lz;
     }
 }
@@ -234,7 +235,7 @@ static inline float logadd(float a, float b)
 {
     if (a < b) { float t = a; a = b; b = t; }
     if (b <= NEG * 0.5f) return a;
-    return a + log1pf(expf(b - a));
+    return a + tasr_logf(1.0f + tasr_expf(b - a));
 }
 
 void tasr_decoder_reset(tasr_decoder_t *d)
@@ -251,12 +252,13 @@ void tasr_decoder_reset(tasr_decoder_t *d)
 
 tasr_decoder_t *tasr_decoder_create(const tasr_lm_t *lm, int V1, int beam, int topk, float lm_weight, float token_bonus)
 {
+    tasr_fast_init();
     tasr_decoder_t *d = (tasr_decoder_t *)tasr_alloc(sizeof(tasr_decoder_t), 1);
     d->lm = lm; d->V1 = V1;
     d->beam = beam > MAXB ? MAXB : beam;
     d->topk = topk > MAXK ? MAXK : topk;
     d->lm_weight = lm_weight; d->token_bonus = token_bonus;
-    d->blank_skip_logp = logf(0.999f);
+    d->blank_skip_logp = -0.0010005003f;   /* logf(0.999f) */
     d->max_nodes = 16384;
     d->nodes = (node_t *)tasr_alloc(sizeof(node_t) * d->max_nodes, 0);
     d->hash_cap = 32768;

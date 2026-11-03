@@ -1,0 +1,21 @@
+== full context, greedy
+test-clean: WER 5.18% (sub 2267 del 225 ins 232) 2620 utts 5.40h in 22s
+test-other: WER 11.60% (sub 4990 del 548 ins 533) 2939 utts 5.34h in 32s
+== stream chunk 8 (0.64 s), greedy
+test-clean: WER 9.28% (sub 3872 del 519 ins 487) 2620 utts 5.40h in 32s
+test-other: WER 19.01% (sub 7791 del 1259 ins 896) 2939 utts 5.34h in 21s
+== stream chunk 16 (1.28 s), greedy
+test-clean: WER 7.34% (sub 3135 del 359 ins 366) 2620 utts 5.40h in 22s
+test-other: WER 15.80% (sub 6617 del 898 ins 751) 2939 utts 5.34h in 21s
+== stream chunk 8, PD LM beam 4 top-k 6
+test-clean: WER 6.66% (sub 2757 del 371 ins 375) 2620 utts 5.40h in 25s
+test-other: WER 15.32% (sub 6271 del 1043 ins 702) 2939 utts 5.34h in 25s
+== stream chunk 8, PD LM beam 2 top-k 3
+test-clean: WER 7.29% (sub 3040 del 414 ins 380) 2620 utts 5.40h in 25s
+test-other: WER 16.26% (sub 6618 del 1169 ins 721) 2939 utts 5.34h in 24s
+== stream chunk 16, PD LM beam 4 top-k 6
+test-clean: WER 5.60% (sub 2369 del 275 ins 300) 2620 utts 5.40h in 26s
+test-other: WER 13.17% (sub 5438 del 807 ins 647) 2939 utts 5.34h in 25s
+== full context, PD LM beam 4 top-k 6
+test-clean: WER 4.27% (sub 1839 del 195 ins 208) 2620 utts 5.40h in 27s
+test-other: WER 9.92% (sub 4187 del 509 ins 493) 2939 utts 5.34h in 28s

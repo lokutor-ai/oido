@@ -28,6 +28,10 @@ lib.tasr_seg_next.argtypes = [ctypes.c_void_p]
 # ~55% of them on the dual-core critical path; 1.3-1.6 cycles/instruction at 240 MHz; + ~0.08 s/s of flash/PSRAM stalls.
 A_GREEDY, A_LM, B = 7.76e6, 8.6e6, 0.124e6
 
+# Oido v2 models, measured on a board (one core, 240 MHz, language model on): streaming real-time factor and the final text's
+# delay after the end of speech with audio fed at real-time speed (research/v2_speed_log.md); the model above is for v1 only.
+V2_MEASURED = {"oido_v2a": (0.72, 0.43), "oido_v2b": (0.54, 0.26)}
+
 
 def esp32_finish_seconds(n_samples, chunk, int4):
     """Streaming: compute left after the pause is detected (the last partial chunk). QEMU: ~17 M + 5.5 M instructions
@@ -100,7 +104,7 @@ def main():
     int4 = os.path.getsize(path) < 10_000_000
     lm_path = os.path.splitext(path)[0] + ".tlm"  # a model's own LM (e.g. oido_es.tlm), else the English one
     if not os.path.exists(lm_path):
-        lm_path = os.path.join(MODELS, "nemo_lm.tlm")
+        lm_path = os.path.join(MODELS, "oido_v2.tlm" if os.path.basename(path).startswith("oido_v2") else "nemo_lm.tlm")
     if not a.no_lm and not os.path.exists(lm_path):
         print(f"note: {lm_path} not found, decoding greedily without the language model", flush=True)
     lm = pytasr.LM(lm_path) if not a.no_lm and os.path.exists(lm_path) else None
@@ -125,11 +129,16 @@ def main():
         text = eng.transcribe(utt)
         host = time.time() - t0
         lo, hi = esp32_seconds(dur, lm is not None, int4)
+        v2 = V2_MEASURED.get(os.path.basename(path)[:8])
         if sys.stdout.isatty():
             sys.stdout.write("\r" + " " * 40 + "\r")
         print(f"[{dur:4.1f} s] {text or '(nothing recognized)'}")
-        print(f"         ESP32-S3 est. {lo:.1f}-{hi:.1f} s compute (RTF {lo/dur:.2f}-{hi/dur:.2f}), "
-              f"text ~{0.8 + lo:.1f}-{0.8 + hi:.1f} s after you stop talking | laptop {host*1000:.0f} ms", flush=True)
+        if v2:
+            print(f"         ESP32-S3 measured: real-time factor {v2[0]:.2f} (streaming), final text ~{v2[1]:.2f} s after the end of speech "
+                  f"(+ the {0.8:.1f} s pause wait) | laptop {host*1000:.0f} ms", flush=True)
+        else:
+            print(f"         ESP32-S3 est. {lo:.1f}-{hi:.1f} s compute (RTF {lo/dur:.2f}-{hi/dur:.2f}), "
+                  f"text ~{0.8 + lo:.1f}-{0.8 + hi:.1f} s after you stop talking | laptop {host*1000:.0f} ms", flush=True)
         if a.save:
             import soundfile as sf
             sf.write(os.path.join(a.save, f"utt{k:03d}.wav"), utt, 16000, subtype="PCM_16")
@@ -163,8 +172,12 @@ def main():
             if sys.stdout.isatty():
                 sys.stdout.write("\r" + " " * 100 + "\r")
             print(f"[{n_done/16000:4.1f} s] {text or '(nothing recognized)'}")
-            print(f"         ESP32-S3 est.: final text {pause + lo:.2f}-{pause + hi:.2f} s after you stop talking "
-                  f"({pause:.1f} s pause + {lo*1000:.0f}-{hi*1000:.0f} ms compute) | laptop {host*1000:.0f} ms", flush=True)
+            if v2m:
+                print(f"         ESP32-S3 measured: final text {pause + v2m[1]:.2f} s after you stop talking "
+                      f"({pause:.1f} s pause + {v2m[1]*1000:.0f} ms compute) | laptop {host*1000:.0f} ms", flush=True)
+            else:
+                print(f"         ESP32-S3 est.: final text {pause + lo:.2f}-{pause + hi:.2f} s after you stop talking "
+                      f"({pause:.1f} s pause + {lo*1000:.0f}-{hi*1000:.0f} ms compute) | laptop {host*1000:.0f} ms", flush=True)
             if a.save:
                 import soundfile as sf
                 sf.write(os.path.join(a.save, f"utt{st.get('k', 0):03d}.wav"), seg.buf[:n_done], 16000, subtype="PCM_16")
@@ -174,7 +187,11 @@ def main():
 
     with open(path, "rb") as fh:  # header word 11 = the chunk (encoder frames) the model was exported for
         stream_chunk = int.from_bytes(fh.read(64)[48:52], "little") or 16
-    if stream is not None:
+    v2m = V2_MEASURED.get(os.path.basename(path)[:8])
+    if stream is not None and v2m:
+        print(f"streaming model ({stream_chunk} frames of 80 ms = {stream_chunk * 0.08:.2f} s chunks): partial text while you speak, final text right after the pause. "
+              f"ESP32-S3 (measured): real-time factor {v2m[0]:.2f}", flush=True)
+    elif stream is not None:
         lo, hi = esp32_stream_rtf(stream_chunk, int4)
         print(f"streaming model ({stream_chunk} frames = {stream_chunk * 0.04:.2f} s chunks): partial text while you speak, "
               f"final text right after the pause. ESP32-S3 est. real-time factor {lo:.2f}-{hi:.2f}"

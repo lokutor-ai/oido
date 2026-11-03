@@ -15,12 +15,12 @@ from wer_utils import load_librispeech, wer  # noqa: E402
 _stream = None
 
 
-def _init(path, chunk, left, lm_path, beam, lw, tb, stream=False, sc=0, sl=0):
+def _init(path, chunk, left, lm_path, beam, lw, tb, stream=False, sc=0, sl=0, topk=6):
     global _stream
     import pytasr
     lm = pytasr.LM(lm_path) if lm_path else None
     if path.endswith(".tnm"):  # NeMo conformer-ctc-small utterance engine (or its streaming engine)
-        _stream = pytasr.Nemo(path, lm=lm, beam=beam, lm_weight=lw, token_bonus=tb)
+        _stream = pytasr.Nemo(path, lm=lm, beam=beam, topk=topk, lm_weight=lw, token_bonus=tb)
         if stream:
             _stream = pytasr.NemoStream(_stream, sc, sl)  # 0 = the chunk / left context stored in the model
     else:
@@ -58,6 +58,7 @@ def main():
     ap.add_argument("--sl", type=int, default=0, help="--stream: left context in encoder frames (0 = model default)")
     ap.add_argument("--lm", default="")
     ap.add_argument("--beam", type=int, default=0)
+    ap.add_argument("--topk", type=int, default=6, help="candidate tokens per frame in the beam search")
     ap.add_argument("--lm_weight", type=float, default=None, help="default: the weights stored in the LM file")
     ap.add_argument("--token_bonus", type=float, default=None)
     a = ap.parse_args()
@@ -83,7 +84,7 @@ def main():
         jobs.append((os.path.basename(m), [(d.get("id", str(i)), d["wav"], d["text"]) for i, d in enumerate(its)]))
     res = {}
     with Pool(a.procs, initializer=_init,
-              initargs=(a.model, a.chunk, a.left, a.lm, a.beam, a.lm_weight, a.token_bonus, a.stream, a.sc, a.sl)) as pool:
+              initargs=(a.model, a.chunk, a.left, a.lm, a.beam, a.lm_weight, a.token_bonus, a.stream, a.sc, a.sl, a.topk)) as pool:
         for name, items in jobs:
             t = time.time()
             out = pool.map(_run, items, chunksize=4)

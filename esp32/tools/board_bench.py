@@ -17,6 +17,7 @@ import serial
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FW = os.path.join(HERE, "..")
+UART = bool(os.environ.get("TASR_UART"))  # board behind a UART bridge instead of the native USB-Serial/JTAG
 
 
 def wer_counts(ref, hyp):
@@ -42,6 +43,11 @@ def capture(port, until, timeout, boot_timeout=0):
             time.sleep(0.3)
     if not s.is_open:
         raise RuntimeError("serial port did not come back")
+    if UART:  # UART bridge (CH340/CH343...): RTS drives EN, DTR stays low (IO0 high = normal boot); reset here to keep the whole boot log
+        s.reset_input_buffer()
+        s.rts = True
+        time.sleep(0.15)
+        s.rts = False
     buf = b""
     while time.time() - t0 < timeout:
         buf += s.read(4096)
@@ -57,6 +63,8 @@ def capture(port, until, timeout, boot_timeout=0):
 def reset(port):
     """Boot the application: a plain RTS reset leaves a native-USB board in download mode, a watchdog reset does not.
     After a boot hang the USB device can stop answering; TASR_USB_RESET names a helper that resets it with libusb."""
+    if UART:
+        return  # capture() resets the board through RTS
     cmd = ["esptool.py", "--chip", "esp32s3", "-p", port, "--connect-attempts", "3", "--after", "watchdog_reset", "read_mac"]
     for attempt in range(3):
         if subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
@@ -137,7 +145,15 @@ def main():
         args = [c for cl in b for c in (cl["path"], cl["ref"])]
         lm = [os.path.abspath(a.lm)] if a.lm else []
         if bi == 0:
-            subprocess.run([os.path.join(HERE, "flash.sh"), a.port, model] + lm + args, check=True, env=env)
+            for attempt in range(3):   # a UART-bridge link sometimes drops in the middle of a long flash: retry, slower
+                r = subprocess.run([os.path.join(HERE, "flash.sh"), a.port, model] + lm + args, env=env)
+                if r.returncode == 0:
+                    break
+                print(f"flash failed (attempt {attempt + 1}), retrying at a lower baud rate", flush=True)
+                env = dict(env, TASR_BAUD="460800")
+                time.sleep(3)
+            else:
+                raise RuntimeError("flashing failed three times")
             # the same layout rule as flash.sh
             name = os.path.basename(model)
             layout = "nemo4_16" if "nemo4" in name else "rnnt16" if "rnnt" in name else "nemo16lm" if name.endswith(".tnm") else "tinyasr16"
@@ -148,15 +164,31 @@ def main():
             subprocess.run([py, os.path.join(HERE, "mkimages.py"), model, out, "--layout", layout, "--wavs"] + [c["path"] for c in b]
                            + ["--refs"] + [c["ref"] for c in b] + (["--lm", a.lm] if a.lm else []), check=True,
                            stdout=subprocess.DEVNULL)
-            subprocess.run(["esptool.py", "--chip", "esp32s3", "-p", a.port, "-b", "921600", "write_flash", hex(audio_off),
-                            os.path.join(out, "audio.bin")], check=True, stdout=subprocess.DEVNULL)
+            for attempt in range(4):   # the UART-bridge link sometimes drops: retry, slower
+                r = subprocess.run(["esptool.py", "--chip", "esp32s3", "-p", a.port, "-b", "921600" if attempt < 2 else "460800", "write_flash",
+                                    hex(audio_off), os.path.join(out, "audio.bin")], stdout=subprocess.DEVNULL)
+                if r.returncode == 0:
+                    break
+                time.sleep(3)
+            else:
+                raise RuntimeError("audio partition write failed 4 times")
         text = ""
-        for attempt in range(3):
-            reset(a.port)
-            text = capture(a.port, "DONE", 120 + 6.0 * sum(c["dur"] for c in b), boot_timeout=60)
-            if "Calling app_main" in text:
-                break
-            print(f"batch {bi}: application did not start (attempt {attempt + 1}), resetting", flush=True)
+        for attempt in range(4):
+            try:
+                reset(a.port)
+                text = capture(a.port, "DONE", 120 + 6.0 * sum(c["dur"] for c in b), boot_timeout=60)
+                if "Calling app_main" in text and "\nDONE" in text:
+                    break
+            except (OSError, serial.SerialException, RuntimeError) as ex:   # the board dropped off the USB bus mid-run: wait for it, repeat the batch
+                print(f"batch {bi}: serial link lost ({ex}); waiting for the port", flush=True)
+                for _ in range(60):
+                    if os.path.exists(a.port):
+                        break
+                    time.sleep(1)
+                time.sleep(5)
+                text = ""
+                continue
+            print(f"batch {bi}: application did not start or did not finish (attempt {attempt + 1}), resetting", flush=True)
         text_all += f"\n===== batch {bi} =====\n" + text
         utts, m = parse(text)
         mem = m or mem

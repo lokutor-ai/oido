@@ -15,6 +15,45 @@
 #define TASR_PIE 1
 #endif
 
+#define WPF_BLK 16384  // bytes of weights fetched ahead per block
+#ifdef TASR_PIE
+// Weight preload: the ESP32-S3 D-cache has a ROM-driven manual preload engine that runs in the background (it reads
+// external memory at the full bus rate, 89 MB/s from PSRAM, without slowing the CPU). While a block of weights is being
+// multiplied, the next block is already on its way into the cache, so a layer takes max(compute, fetch) instead of
+// compute + fetch. Measured on silicon in tools/gemm_bench (a 32 KB preload under a 115k-cycle kernel was free).
+#include "esp32s3/rom/cache.h"
+#ifdef CONFIG_TASR_EXP_NO_WPF
+int tasr_wpf = 0;
+#else
+int tasr_wpf = 1;
+#endif
+static inline int wpf_ext(const void *p)
+{
+    const uintptr_t a = (uintptr_t)p;
+    return a >= 0x3C000000u && a < 0x3E000000u;  // external memory (PSRAM, flash) on the data bus
+}
+static inline void wpf_start(const void *p, size_t n, int *busy)
+{
+    if (!tasr_wpf || !n || !wpf_ext(p)) return;
+    const uintptr_t a = (uintptr_t)p & ~(uintptr_t)63;
+    size_t sz = (((uintptr_t)p + n + 63) & ~(uintptr_t)63) - a;
+    if (sz > 32768) sz = 32768;
+    Cache_Start_DCache_Preload((uint32_t)a, (uint32_t)sz, 0);
+    *busy = 1;
+}
+static inline void wpf_wait(int *busy)
+{
+    if (!*busy) return;
+    while (!Cache_DCache_Preload_Done()) {}
+    Cache_End_DCache_Preload(0);
+    *busy = 0;
+}
+#else
+int tasr_wpf = 0;
+#define wpf_start(p, n, busy) ((void)(p), (void)(n), (void)(busy))
+#define wpf_wait(busy) ((void)(busy))
+#endif
+
 // round-to-nearest-even via the 1.5*2^23 trick (matches torch.round), valid for |x| < 2^22
 static inline int rne(float x)
 {
@@ -223,17 +262,90 @@ void tasr_quant_rows(const float *x, int T, int K, int ldx, int8_t *xq, int ldq,
     for (int t = 0; t < T; t++) {
         const float *r = x + (size_t)t * ldx;
         int8_t *q = xq + (size_t)t * ldq;
-        float m = 0.f;
-        for (int k = 0; k < K; k++) {
-            float a = fabsf(r[k]);
-            m = a > m ? a : m;
+        float m0 = 0.f, m1 = 0.f, m2 = 0.f, m3 = 0.f;   // four running maxima (max is exact and order independent)
+        int k = 0;
+        for (; k + 4 <= K; k += 4) {
+            const float a0 = fabsf(r[k]), a1 = fabsf(r[k + 1]), a2 = fabsf(r[k + 2]), a3 = fabsf(r[k + 3]);
+            m0 = a0 > m0 ? a0 : m0; m1 = a1 > m1 ? a1 : m1; m2 = a2 > m2 ? a2 : m2; m3 = a3 > m3 ? a3 : m3;
         }
+        for (; k < K; k++) { const float a = fabsf(r[k]); m0 = a > m0 ? a : m0; }
+        float m = m0 > m1 ? m0 : m1;
+        const float mb = m2 > m3 ? m2 : m3;
+        m = m > mb ? m : mb;
         if (m < 1e-30f) m = 1e-30f;
         const float inv = 127.0f / m;
-        for (int k = 0; k < K; k++) q[k] = (int8_t)rne(r[k] * inv);  // |r*inv| <= 127 by construction
+        k = 0;
+        for (; k + 4 <= K; k += 4) {   // |r*inv| <= 127 by construction
+            const float y0 = r[k] * inv, y1 = r[k + 1] * inv, y2 = r[k + 2] * inv, y3 = r[k + 3] * inv;
+            q[k] = (int8_t)rne(y0); q[k + 1] = (int8_t)rne(y1); q[k + 2] = (int8_t)rne(y2); q[k + 3] = (int8_t)rne(y3);
+        }
+        for (; k < K; k++) q[k] = (int8_t)rne(r[k] * inv);
         for (int k = K; k < kp; k++) q[k] = 0;
         xs[t] = m / 127.0f;
     }
+}
+
+// ---- table-driven exp(-u), sigmoid and tanh (language model softmax and GRU gates, log-softmax of the CTC head).
+// libm costs 250-380 cycles per call on the LX7; these are ~15 cycles. 1/16-step tables with linear interpolation:
+// relative error of exp(-u) < 5e-4 on [0, 24), absolute error of the sigmoid < 5e-5, of tanh < 1e-4.
+#define TFAST_EXP_N 384     // u in [0, 24)
+#define TFAST_SIG_N 384     // x in [-12, 12)
+static float tfast_exp[TFAST_EXP_N + 2], tfast_sig[TFAST_SIG_N + 2];
+static int tfast_ready;
+void tasr_fast_init(void)
+{
+    if (tfast_ready) return;
+    for (int i = 0; i < TFAST_EXP_N + 2; i++) tfast_exp[i] = (float)exp(-(double)i / 16.0);
+    for (int i = 0; i < TFAST_SIG_N + 2; i++) tfast_sig[i] = (float)(1.0 / (1.0 + exp(-((double)i / 16.0 - 12.0))));
+    tfast_ready = 1;
+}
+float tasr_fast_expneg(float u)
+{
+    if (u >= 23.9f) return 0.f;
+    if (u < 0.f) u = 0.f;
+    const float x = u * 16.0f;
+    const int i = (int)x;
+    const float f = x - (float)i;
+    return tfast_exp[i] + f * (tfast_exp[i + 1] - tfast_exp[i]);
+}
+float tasr_fast_sigmoid(float x)
+{
+    if (x <= -11.99f) return tfast_sig[0];
+    if (x >= 11.99f) return tfast_sig[TFAST_SIG_N];
+    const float u = (x + 12.0f) * 16.0f;
+    const int i = (int)u;
+    const float f = u - (float)i;
+    return tfast_sig[i] + f * (tfast_sig[i + 1] - tfast_sig[i]);
+}
+float tasr_fast_tanh(float x) { return 2.0f * tasr_fast_sigmoid(2.0f * x) - 1.0f; }
+
+// float epilogue of an integer tile: y = (float)acc * xs * sw + b, evaluated in exactly this order (no fused multiply-add:
+// -ffp-contract=off), four independent chains at a time so the FPU latencies overlap
+void tasr_epilogue_row(float *restrict yo, const int32_t *restrict a, float xst, const float *restrict sw, const float *restrict bb, int n)
+{
+    int j = 0;
+    for (; j + 4 <= n; j += 4) {
+        float a0 = (float)a[j], a1 = (float)a[j + 1], a2 = (float)a[j + 2], a3 = (float)a[j + 3];
+        const float s0 = sw[j], s1 = sw[j + 1], s2 = sw[j + 2], s3 = sw[j + 3];
+        const float b0 = bb[j], b1 = bb[j + 1], b2 = bb[j + 2], b3 = bb[j + 3];
+        a0 *= xst; a1 *= xst; a2 *= xst; a3 *= xst;
+        a0 *= s0; a1 *= s1; a2 *= s2; a3 *= s3;
+        yo[j] = a0 + b0; yo[j + 1] = a1 + b1; yo[j + 2] = a2 + b2; yo[j + 3] = a3 + b3;
+    }
+    for (; j < n; j++) yo[j] = (float)a[j] * xst * sw[j] + bb[j];
+}
+// one output channel, T rows: yo[t * ldy] = (float)acc[t] * xs[t] * sw + b
+void tasr_epilogue_col(float *restrict yo, int ldy, const int32_t *restrict acc, const float *restrict xs, float sw, float b, int T)
+{
+    int t = 0;
+    for (; t + 4 <= T; t += 4) {
+        float a0 = (float)acc[t], a1 = (float)acc[t + 1], a2 = (float)acc[t + 2], a3 = (float)acc[t + 3];
+        a0 *= xs[t]; a1 *= xs[t + 1]; a2 *= xs[t + 2]; a3 *= xs[t + 3];
+        a0 *= sw; a1 *= sw; a2 *= sw; a3 *= sw;
+        yo[(size_t)t * ldy] = a0 + b; yo[(size_t)(t + 1) * ldy] = a1 + b;
+        yo[(size_t)(t + 2) * ldy] = a2 + b; yo[(size_t)(t + 3) * ldy] = a3 + b;
+    }
+    for (; t < T; t++) yo[(size_t)t * ldy] = (float)acc[t] * xs[t] * sw + b;
 }
 
 void tasr_qlin_range(const tasr_qlin_t *L, const int8_t *xq, const float *xs, int T, int ldq, float *y, int ldy,
@@ -241,7 +353,18 @@ void tasr_qlin_range(const tasr_qlin_t *L, const int8_t *xq, const float *xs, in
 {
     const int kp = L->kp;
     if (L->blocked) {
-        for (int nb = n0; nb < n1; nb += 16) {
+        const size_t tb = (size_t)kp * 8;  // bytes of one 16-output tile
+        const int per = tb >= WPF_BLK ? 1 : (int)(WPF_BLK / tb);
+        const uint8_t *w0 = (const uint8_t *)L->w + (size_t)n0 * (kp >> 1);
+        const size_t total = (size_t)((n1 - n0) / 16) * tb;
+        int busy = 0, ti = 0;
+        wpf_start(w0, total < per * tb ? total : per * tb, &busy);
+        for (int nb = n0; nb < n1; nb += 16, ti++) {
+            if (ti % per == 0) {
+                wpf_wait(&busy);
+                const size_t nx = (size_t)(ti + per) * tb;
+                if (nx < total) wpf_start(w0 + nx, total - nx < per * tb ? total - nx : per * tb, &busy);
+            }
             tasr_unpack_s4((const uint8_t *)L->w + (size_t)nb * (kp >> 1), wtmp, kp * 16);
             const float *sw = L->s + nb, *bb = L->b + nb;
             for (int t0 = 0; t0 < T; t0 += 64) {
@@ -257,15 +380,26 @@ void tasr_qlin_range(const tasr_qlin_t *L, const int8_t *xq, const float *xs, in
                 for (int t = 0; t < tn; t++) {
                     float *yo = y + (size_t)(t0 + t) * ldy + nb;
                     const int32_t *a = acc + t * 16;
-                    const float xst = xs[t0 + t];
-                    for (int j = 0; j < 16; j++) yo[j] = (float)a[j] * xst * sw[j] + bb[j];
+                    tasr_epilogue_row(yo, a, xs[t0 + t], sw, bb, 16);
                 }
             }
         }
+        wpf_wait(&busy);
         return;
     }
     if (L->bits == 8 && kp <= 256) {  // x-stationary kernel (wins for short rows only), 16 outputs x 64 rows per tile
-        for (int nb0 = n0; nb0 < n1; nb0 += 16) {
+        const size_t tb = (size_t)kp * 16;
+        const int per = tb >= WPF_BLK ? 1 : (int)(WPF_BLK / tb);
+        const int8_t *w0 = L->w + (size_t)n0 * kp;
+        const size_t total = (size_t)(n1 - n0) * kp;
+        int busy = 0, ti = 0;
+        wpf_start(w0, total < per * tb ? total : per * tb, &busy);
+        for (int nb0 = n0; nb0 < n1; nb0 += 16, ti++) {
+            if (ti % per == 0) {
+                wpf_wait(&busy);
+                const size_t nx = (size_t)(ti + per) * tb;
+                if (nx < total) wpf_start(w0 + nx, total - nx < per * tb ? total - nx : per * tb, &busy);
+            }
             const int nb = n1 - nb0 < 16 ? n1 - nb0 : 16;
             const float *sw = L->s + nb0, *bb = L->b + nb0;
             for (int t0 = 0; t0 < T; t0 += 64) {
@@ -274,11 +408,11 @@ void tasr_qlin_range(const tasr_qlin_t *L, const int8_t *xq, const float *xs, in
                 for (int t = 0; t < tn; t++) {
                     float *yo = y + (size_t)(t0 + t) * ldy + nb0;
                     const int32_t *a = acc + t * nb;
-                    const float xst = xs[t0 + t];
-                    for (int j = 0; j < nb; j++) yo[j] = (float)a[j] * xst * sw[j] + bb[j];
+                    tasr_epilogue_row(yo, a, xs[t0 + t], sw, bb, nb);
                 }
             }
         }
+        wpf_wait(&busy);
         return;
     }
     if (kp > 1024) {
@@ -310,8 +444,7 @@ void tasr_qlin_range(const tasr_qlin_t *L, const int8_t *xq, const float *xs, in
                 for (int t = 0; t < tn; t++) {
                     float *yo = y + (size_t)(t0 + t) * ldy + nb0;
                     const int32_t *a = acc + t * nb;
-                    const float xst = xs[t0 + t];
-                    for (int j = 0; j < nb; j++) yo[j] = (float)a[j] * xst * sw[j] + bb[j];
+                    tasr_epilogue_row(yo, a, xs[t0 + t], sw, bb, nb);
                 }
             }
         }
@@ -320,9 +453,20 @@ void tasr_qlin_range(const tasr_qlin_t *L, const int8_t *xq, const float *xs, in
     // row layout, K <= 1024: activation tiles of up to 64 rows (<= 64 KB, internal RAM in both engines); each weight
     // row is fetched once per tile
     const int tb = 64;
+    const size_t rb = L->bits == 8 ? (size_t)kp : (size_t)(kp >> 1);  // bytes of one weight row
+    const int per = rb >= WPF_BLK ? 1 : (int)(WPF_BLK / rb);
     for (int t0 = 0; t0 < T; t0 += tb) {
         const int tn = T - t0 < tb ? T - t0 : tb;
+        const uint8_t *w0 = (const uint8_t *)L->w + (size_t)n0 * rb;
+        const size_t total = (size_t)(n1 - n0) * rb;
+        int busy = 0;
+        wpf_start(w0, total < per * rb ? total : per * rb, &busy);
         for (int n = n0; n < n1; n++) {
+            if ((n - n0) % per == 0) {
+                wpf_wait(&busy);
+                const size_t nx = (size_t)(n - n0 + per) * rb;
+                if (nx < total) wpf_start(w0 + nx, total - nx < per * rb ? total - nx : per * rb, &busy);
+            }
             const int8_t *w;
             if (L->bits == 4) {
                 tasr_unpack_s4((const uint8_t *)L->w + (size_t)n * (kp >> 1), wtmp, kp);
@@ -333,9 +477,9 @@ void tasr_qlin_range(const tasr_qlin_t *L, const int8_t *xq, const float *xs, in
             tasr_dot_rows_s8(w, xq + (size_t)t0 * ldq, ldq, tn, kp, acc);
             const float sw = L->s[n], b = L->b[n];
             float *yo = y + (size_t)t0 * ldy + n;
-            const float *xst = xs + t0;
-            for (int t = 0; t < tn; t++) yo[(size_t)t * ldy] = (float)acc[t] * xst[t] * sw + b;
+            tasr_epilogue_col(yo, ldy, acc, xs + t0, sw, b, tn);
         }
+        wpf_wait(&busy);
     }
 }
 

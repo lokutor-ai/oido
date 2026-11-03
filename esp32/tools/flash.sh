@@ -10,6 +10,7 @@ set -e
 PORT=$1; MODEL=$(cd "$(dirname "$2")" && pwd)/$(basename "$2"); shift 2
 LM=""; if [[ "${1:-}" == *.tlm ]]; then LM=$(cd "$(dirname "$1")" && pwd)/$(basename "$1"); shift; fi
 DEFLM="$(cd "$(dirname "$0")/../.." && pwd)/models/nemo_lm.tlm"
+case "$MODEL" in *oido_v2*) DEFLM="$(cd "$(dirname "$0")/../.." && pwd)/models/oido_v2.tlm" ;; esac   # the v2 models share one LM (weights tuned for them)
 [ -f "${MODEL%.tnm}.tlm" ] && DEFLM="${MODEL%.tnm}.tlm"   # a model's own LM (oido_es.tlm), else the English one
 [ -z "$LM" ] && [ -z "$NO_LM" ] && [[ "$MODEL" == *.tnm ]] && [ -f "$DEFLM" ] && LM=$DEFLM
 [ -n "$NO_LM" ] && LM=""
@@ -20,20 +21,29 @@ PY=${PYTHON:-$(command -v python3)}   # needs numpy + soundfile (ESP-IDF's own p
 cd "$(dirname "$0")/.."
 . "${IDF_PATH:-$HOME/esp/esp-idf}/export.sh" > /dev/null
 case "$MODEL" in
-  *nemo4*.tnm) LAYOUT=nemo4_16; CFG="sdkconfig.defaults;sdkconfig.nemo4" ;;    # int4: 6 MB left for your app
+  *nemo4*.tnm|*oido_v2*.tnm) LAYOUT=nemo4_16; CFG="sdkconfig.defaults;sdkconfig.nemo4" ;;    # int4: 6 MB left for your app
   *rnnt*.tnm) LAYOUT=rnnt16; CFG="sdkconfig.defaults;sdkconfig.rnnt16"; LM="" ;;   # transducer: no external LM
   *.tnm)      LAYOUT=nemo16lm; CFG="sdkconfig.defaults;sdkconfig.nemo16lm" ;;
   *)          LAYOUT=tinyasr16; CFG="sdkconfig.defaults" ;;
 esac
 [ "$MODE" = mic ] && CFG="$CFG;sdkconfig.mic"
-SUF=""; [ -n "$TASR_OLED" ] && CFG="$CFG;sdkconfig.oled" && SUF=_oled
+SUF=""
+case "$MODEL" in *oido_v2b*) CFG="$CFG;sdkconfig.fastdec"; SUF=_fastdec ;; esac   # variant B: beam 2 / top-k 3 (what its real-time factor was measured with)
+[ -n "$TASR_OLED" ] && CFG="$CFG;sdkconfig.oled" && SUF=${SUF}_oled
 [ -n "$TASR_PACED" ] && CFG="$CFG;sdkconfig.paced" && SUF=${SUF}_paced   # file mode: also stream at real-time pace, report the final-text delay
+[ -n "$TASR_EXTRA_CFG" ] && CFG="$CFG;$TASR_EXTRA_CFG" && SUF=${SUF}_$(basename "$TASR_EXTRA_CFG" | tr -c "A-Za-z0-9\n" _)   # e.g. firmware/sdkconfig.exp_nowpf (path relative to firmware/)
 [ -n "$TASR_DUAL" ] && SUF=${SUF}_2c
 B=build_${LAYOUT}_${MODE}${SUF}
 (cd firmware && idf.py -B $B -D SDKCONFIG=sdkconfig_${LAYOUT}_${MODE}${SUF} -D SDKCONFIG_DEFAULTS="$CFG" -D TASR_2C=${TASR_DUAL:-0} build)
 OUT=build_images/${LAYOUT}_${MODE}; mkdir -p $OUT
 LMARG=""; [ -n "$LM" ] && LMARG="--lm $LM"
 "$PY" tools/mkimages.py "$MODEL" $OUT --layout $LAYOUT --wavs "${WAVS[@]}" --refs "${REFS[@]}" $LMARG --merge firmware/$B --flash_mode keep
-AFTER=hard_reset; case "$PORT" in *usbmodem*|*ttyACM*) AFTER=watchdog_reset ;; esac   # native USB: an RTS reset lands in download mode
-esptool.py --chip esp32s3 -p "$PORT" -b 921600 --after $AFTER write_flash 0x0 $OUT/flash.bin
+AFTER=hard_reset; case "$PORT" in *usbmodem*|*ttyACM*) [ -z "$TASR_UART" ] && AFTER=watchdog_reset ;; esac   # native USB: an RTS reset lands in download mode (TASR_UART=1: board behind a UART bridge)
+if [ -n "$TASR_QUICK" ]; then   # model and LM already on the board: bootloader, partition table, app and the audio partition only
+  AUD=$("$PY" -c "import sys; sys.path.insert(0, 'tools'); import mkimages; print(hex(mkimages.LAYOUTS['$LAYOUT']['AUDIO'][0]))")
+  esptool.py --chip esp32s3 -p "$PORT" -b ${TASR_BAUD:-921600} --after $AFTER write_flash --flash_mode dio --flash_size 16MB --flash_freq 80m \
+    0x0 firmware/$B/bootloader/bootloader.bin 0x8000 firmware/$B/partition_table/partition-table.bin 0x10000 firmware/$B/tinyasr_fw.bin $AUD $OUT/audio.bin
+else
+esptool.py --chip esp32s3 -p "$PORT" -b ${TASR_BAUD:-921600} --after $AFTER write_flash 0x0 $OUT/flash.bin
+fi
 echo "flashed ($LAYOUT, $MODE). monitor: (cd firmware && idf.py -B $B -p $PORT monitor)"

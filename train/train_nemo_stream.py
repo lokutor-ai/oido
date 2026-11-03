@@ -18,6 +18,10 @@ compute when the speaker stops:
 Quantization: --bits 0 trains in floating point (int8 post-training quantization is lossless for this model);
 --bits 8/4 fake-quantize like train_nemo_qat.py.
 
+Oido v2 architecture options (see nemo_small.py): --sub_ch 64 (light front end, channels kept by importance),
+--stack 2 (80 ms frames after sub_out; --chunks / --lefts / --val_chunk / --val_left are then in 80 ms frames),
+--n_layers N / --keep_layers i,j,k (fewer Conformer layers). Starting from a full-size checkpoint (--init) converts it.
+
 Resumable for spot instances: out/ckpt.pt (+ optional --s3 copy) holds model, EMA, optimizer and step.
 
 python train_nemo_stream.py --train a.jsonl,b.jsonl --val v.jsonl --nemo ../models/nemo_small --lang es \
@@ -28,7 +32,7 @@ import numpy as np, sentencepiece as spm, torch, torch.nn as nn, torch.nn.functi
 from torch.utils.data import DataLoader
 
 from data import AudioDataset, BucketBatchSampler, collate, load_manifest
-from nemo_small import NemoSmall, rel_pos_emb
+from nemo_small import NemoSmall, cfg_from_state, rel_pos_emb
 from quant_ops import fq_act, fq_weight, fq_rows
 
 
@@ -137,8 +141,8 @@ class SModel(nn.Module):
         x = x + 0.5 * self.ql(L.ff2_l2, F.silu(self.ql(L.ff2_l1, h, b)), b)
         return L.norm_out(x)
 
-    def forward(self, feats, flen, chunk=0, left=0):
-        """feats (B, T, 80) -> logits (B, T', V+1), lengths. chunk > 0: chunked attention with that many frames."""
+    def front(self, feats, flen):
+        """feats (B, T, 80) -> sub_out * sqrt(d) (B, T2, d) at 40 ms, lengths (before frame stacking)."""
         m = self.m
         x = F.relu(m.conv0(feats[:, None]))
         B, C, T1, F1 = x.shape
@@ -151,7 +155,20 @@ class SModel(nn.Module):
             y = F.linear(cols.transpose(1, 2), w2, m.conv2.bias)
         y = F.relu(y).view(B, T2, F2, C).permute(0, 1, 3, 2).reshape(B, T2, C * F2)
         x = self.ql(m.sub_out, y, 8 if self.bits else 0) * math.sqrt(float(m.d))
-        lens = ((flen + 2 - 3) // 2 + 1 + 2 - 3) // 2 + 1
+        return x, ((flen + 2 - 3) // 2 + 1 + 2 - 3) // 2 + 1
+
+    def forward(self, feats, flen, chunk=0, left=0):
+        """feats (B, T, 80) -> logits (B, T', V+1), lengths. chunk > 0: chunked attention with that many frames."""
+        m = self.m
+        x, lens = self.front(feats, flen)
+        B, T2, _ = x.shape
+        if m.stack == 2:  # 80 ms frames: [x[2i]; x[2i+1]] -> Linear; frames past the end are zero (odd tail pairs with 0)
+            x = x.masked_fill((torch.arange(T2, device=x.device)[None] >= lens[:, None])[..., None], 0.0)
+            if T2 % 2:
+                x = F.pad(x, (0, 0, 0, 1))
+            x = self.ql(m.stack_proj, x.reshape(B, x.shape[1] // 2, 2 * m.d), 8 if self.bits else 0)
+            lens = (lens + 1) // 2
+            T2 = x.shape[1]
         mask_k = torch.arange(T2, device=x.device)[None] < lens[:, None]
         allowed = mask_k[:, None, None, :]
         if chunk:
@@ -219,13 +236,22 @@ def main():
     ap.add_argument("--keep_head", action="store_true",
                     help="with --tokenizer: only load that vocabulary, keep the CTC head (continuing a run)")
     ap.add_argument("--stream", action="store_true")
+    ap.add_argument("--dev", default="cuda", help="cuda (cpu only for smoke tests)")
     ap.add_argument("--conv", default="chunk", choices=["chunk", "causal"], help="streaming depthwise conv")
-    ap.add_argument("--chunks", default="4,8,12,16,24,32")
-    ap.add_argument("--lefts", default="0,0,64,128,256")
+    ap.add_argument("--sub_ch", type=int, default=0, help="front-end channels (0 = as in the init model, 176)")
+    ap.add_argument("--stack", type=int, default=1, choices=[1, 2], help="2 = stack pairs of 40 ms frames -> 80 ms")
+    ap.add_argument("--n_layers", type=int, default=0, help="keep only the first N Conformer layers (0 = all)")
+    ap.add_argument("--keep_layers", default="", help="comma list of source layer indices to keep (overrides --n_layers)")
+    ap.add_argument("--chunks", default="", help="chunk sizes in encoder frames (default: 4,8,12,16,24,32; stack 2: 2,4,6,8,12,16)")
+    ap.add_argument("--lefts", default="", help="left contexts in encoder frames (default: 0,0,64,128,256; stack 2: 0,0,32,64)")
     ap.add_argument("--p_full", type=float, default=0.25)
-    ap.add_argument("--val_chunk", type=int, default=16)
-    ap.add_argument("--val_left", type=int, default=128)
+    ap.add_argument("--val_chunk", type=int, default=0, help="default 16 (stack 2: 8)")
+    ap.add_argument("--val_left", type=int, default=0, help="default 128 (stack 2: 64)")
     ap.add_argument("--kd", type=float, default=0.0, help="in-place distillation weight (full-context EMA -> chunked)")
+    ap.add_argument("--fe_steps", type=int, default=0,
+                    help="with --sub_ch: first regress the light front end onto the full front end's output (steps)")
+    ap.add_argument("--fe_lr", type=float, default=2e-3)
+    ap.add_argument("--kd_start", type=int, default=0, help="step at which --kd turns on (the EMA teacher must be good first)")
     ap.add_argument("--max_twer", type=float, default=1e9, help="drop utterances whose teacher WER exceeds this")
     ap.add_argument("--max_dur", type=float, default=20.0)
     ap.add_argument("--s3", default="", help="s3://bucket/prefix to mirror checkpoints to")
@@ -233,7 +259,7 @@ def main():
     ap.add_argument("--p_noise", type=float, default=0.6)
     ap.add_argument("--p_rir", type=float, default=0.3)
     a = ap.parse_args()
-    dev = "cuda"
+    dev = a.dev
     os.makedirs(a.out, exist_ok=True)
     torch.manual_seed(0); random.seed(0)
     sd = torch.load(f"{a.nemo}/state_dict_plain.pt", map_location="cpu")
@@ -247,15 +273,23 @@ def main():
         print("new vocabulary:", tok, flush=True)
     causal = a.stream and a.conv == "causal"
     if causal:
+        assert a.stack == 1 and not a.sub_ch and not a.n_layers and not a.keep_layers, "causal conv: original architecture only"
         make_causal(base)
+    if not a.chunks:
+        a.chunks = "2,4,6,8,12,16" if a.stack == 2 else "4,8,12,16,24,32"
+    if not a.lefts:
+        a.lefts = "0,0,32,64" if a.stack == 2 else "0,0,64,128,256"
+    a.val_chunk = a.val_chunk or (8 if a.stack == 2 else 16)
+    a.val_left = a.val_left or (64 if a.stack == 2 else 128)
+    enc_fps = 25.0 / a.stack  # encoder frames per second
 
     items = load_manifest(a.train.split(","), max_dur=a.max_dur, lang=a.lang)
     n0 = len(items)
     items = [it for it in items if it.get("twer", 0.0) <= a.max_twer]
     for it in items:
         it["ids"] = sp.encode(it["text"])
-    items = [it for it in items if 0 < len(it["ids"]) < it["dur"] * 25 * 0.8]
-    print(f"train utts {len(items)} of {n0} ({sum(it['dur'] for it in items)/3600:.0f} h)", flush=True)
+    items = [it for it in items if 0 < len(it["ids"]) < it["dur"] * enc_fps * 0.8]   # CTC needs >= 1 frame per token
+    print(f"train utts {len(items)} of {n0} ({sum(it['dur'] for it in items)/3600:.0f} h), encoder {enc_fps} frames/s", flush=True)
     val = []
     for v in [x for x in a.val.split(",") if x]:
         vv = load_manifest([v], max_dur=35.0, lang=a.lang)
@@ -277,9 +311,29 @@ def main():
         print("fixed normalization stats computed", flush=True)
     pre = BatchPre(sd["preprocessor.featurizer.window"], sd["preprocessor.featurizer.fb"], mean, std).to(dev)
 
-    if a.init and ck is None:
-        base.load_state_dict(torch.load(a.init, map_location="cpu")["model"])
-        print("init from", a.init, flush=True)
+    fe_teacher = None
+    layers = [int(x) for x in a.keep_layers.split(",")] if a.keep_layers else list(range(a.n_layers or len(base.layers)))
+    want = dict(sub_ch=a.sub_ch or base.cfg["sub_ch"], stack=a.stack, n_layers=len(layers))
+    if ck is not None:  # resume: the architecture is the checkpoint's
+        base = NemoSmall(cfg=ck.get("cfg") or cfg_from_state(ck["model"]))
+    elif a.init:
+        ik = torch.load(a.init, map_location="cpu")
+        icfg = ik.get("cfg") or cfg_from_state(ik["model"])
+        if all(icfg[k] == v for k, v in want.items()):      # already the wanted architecture
+            base = NemoSmall(cfg=icfg)
+            base.load_state_dict(ik["model"])
+        else:                                              # full-size checkpoint -> convert
+            assert icfg["stack"] == 1 and icfg["sub_ch"] == base.cfg["sub_ch"] and icfg["n_layers"] == len(base.layers), icfg
+            base.load_state_dict(ik["model"])
+            fe_teacher = copy.deepcopy(base)
+            base = base.convert(want["sub_ch"], a.stack, layers)
+        print("init from", a.init, "->", base.cfg, flush=True)
+    else:
+        fe_teacher = copy.deepcopy(base)
+        base = base.convert(want["sub_ch"], a.stack, layers)
+    if fe_teacher is not None and (not a.fe_steps or want["sub_ch"] == fe_teacher.cfg["sub_ch"]):
+        fe_teacher = None
+    print(f"model {sum(p.numel() for p in base.parameters())/1e6:.2f} M params, cfg {base.cfg}", flush=True)
     model = SModel(base, a.bits, causal=causal).to(dev)
     ema = copy.deepcopy(model).eval()
     for p in ema.parameters():
@@ -300,10 +354,12 @@ def main():
 
     def save(final=False):
         st = {"model": model.m.state_dict(), "ema": ema.m.state_dict(), "opt": opt.state_dict(), "step": step,
-              "norm_mean": mean, "norm_std": std, "causal": causal, "stream": a.stream, "tokenizer": os.path.basename(tok)}
+              "norm_mean": mean, "norm_std": std, "causal": causal, "stream": a.stream, "tokenizer": os.path.basename(tok),
+              "cfg": model.m.cfg}
         torch.save(st, ckpt_path + ".tmp"); os.replace(ckpt_path + ".tmp", ckpt_path)
         torch.save({"model": ema.m.state_dict(), "bits": a.bits, "step": step, "norm_mean": mean, "norm_std": std,
-                    "causal": causal, "stream": a.stream}, f"{a.out}/last.pt")
+                    "causal": causal, "stream": a.stream, "cfg": model.m.cfg,
+                    "chunk": a.val_chunk, "left": a.val_left}, f"{a.out}/last.pt")
         if a.s3:
             subprocess.Popen(["aws", "s3", "cp", ckpt_path, f"{a.s3}/ckpt.pt", "--only-show-errors"])
             if final:
@@ -330,6 +386,60 @@ def main():
             msg += f" | chunk{a.val_chunk}/left{a.val_left} {evaluate(net, a.val_chunk, a.val_left):.2f}"
         print(msg, flush=True)
 
+    def make_feats(wav, lens):
+        """waveform batch (B, N) in [-1, 1] -> augmented normalized log-mel features (B, T, 80), lengths."""
+        with torch.no_grad():
+            if a.stream:  # random gain: fixed normalization must not depend on the recording level
+                wav = wav * (10.0 ** (torch.empty(wav.shape[0], 1, device=dev).uniform_(-12, 12) / 20.0))
+            f, fl = pre(wav, lens)
+            B, T, _ = f.shape
+            fr = torch.arange(80, device=dev)[None]
+            for _ in range(2):
+                w = torch.randint(0, 16, (B, 1), device=dev); s0 = (torch.rand(B, 1, device=dev) * (80 - w)).long()
+                f = f.masked_fill(((fr >= s0) & (fr < s0 + w))[:, None, :], 0.0)
+            tr = torch.arange(T, device=dev)[None]
+            for _ in range(max(1, T // 200)):
+                w = torch.randint(0, 25, (B, 1), device=dev); s0 = (torch.rand(B, 1, device=dev) * (fl[:, None] - w).clamp(min=1)).long()
+                f = f.masked_fill(((tr >= s0) & (tr < s0 + w))[:, :, None], 0.0)
+        return f, fl
+
+    if fe_teacher is not None and ck is None:
+        # the pruned front end starts far from the full one (WER ~100 %): regress its output (sub_out * sqrt(d)) onto the
+        # full front end's on training audio before anything else is trained
+        teach = SModel(fe_teacher).to(dev).eval()
+        fe_params = [p for n_, p in model.m.named_parameters() if n_.startswith(("conv0", "conv2", "sub_out"))]
+        ofe = torch.optim.AdamW(fe_params, lr=a.fe_lr, betas=(0.9, 0.98), weight_decay=0.0)
+        fs = BucketBatchSampler(items, 250, seed=7)
+        n_fe, acc, t0 = 0, 0.0, time.time()
+        model.train()
+        while n_fe < a.fe_steps:
+            fs.set_epoch(n_fe)
+            for wav, lens, *_ in DataLoader(AugDataset(items, aug), batch_sampler=fs, collate_fn=collate, num_workers=a.workers,
+                                            pin_memory=dev == "cuda", prefetch_factor=4):
+                f, fl = make_feats(wav.to(dev).float() / 32768.0, lens.to(dev))
+                with torch.no_grad():
+                    yt, ln = teach.front(f, fl)
+                with torch.autocast(dev, dtype=torch.bfloat16, enabled=dev == "cuda"):
+                    ys, _ = model.front(f, fl)
+                valid = (torch.arange(yt.shape[1], device=dev)[None] < ln[:, None])[..., None].float()
+                loss = (((ys.float() - yt) ** 2) * valid).sum() / ((yt ** 2) * valid).sum().clamp(min=1e-9)
+                for g in ofe.param_groups:
+                    g["lr"] = a.fe_lr * min(1.0, (n_fe + 1) / 100) * (0.05 + 0.95 * 0.5 * (1 + math.cos(math.pi * n_fe / a.fe_steps)))
+                ofe.zero_grad(set_to_none=True)
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(fe_params, 1.0)
+                ofe.step()
+                n_fe += 1
+                acc += loss.item()
+                if n_fe % 100 == 0:
+                    print(f"front-end regression step {n_fe} relative MSE {acc / 100:.4f} {time.time() - t0:.0f}s", flush=True)
+                    acc = 0.0
+                if n_fe >= a.fe_steps:
+                    break
+        ema.m.load_state_dict(model.m.state_dict())
+        del teach, fe_teacher, ofe
+        print("front-end regression done", flush=True)
+
     if step == 0:
         report("init", model)
     model.train()
@@ -338,30 +448,18 @@ def main():
     while step < a.steps:
         sampler.set_epoch(ep)
         dl = DataLoader(AugDataset(items, aug), batch_sampler=sampler, collate_fn=collate, num_workers=a.workers,
-                        pin_memory=True, prefetch_factor=4, persistent_workers=False)
+                        pin_memory=dev == "cuda", prefetch_factor=4, persistent_workers=False)
         for wav, lens, tokb, tl, _ in dl:
             wav = wav.to(dev).float() / 32768.0
             lens, tokb, tl = lens.to(dev), tokb.to(dev), tl.to(dev)
-            with torch.no_grad():
-                if a.stream:  # random gain: fixed normalization must not depend on the recording level
-                    wav = wav * (10.0 ** (torch.empty(wav.shape[0], 1, device=dev).uniform_(-12, 12) / 20.0))
-                f, fl = pre(wav, lens)
-                B, T, _ = f.shape
-                fr = torch.arange(80, device=dev)[None]
-                for _ in range(2):
-                    w = torch.randint(0, 16, (B, 1), device=dev); s0 = (torch.rand(B, 1, device=dev) * (80 - w)).long()
-                    f = f.masked_fill(((fr >= s0) & (fr < s0 + w))[:, None, :], 0.0)
-                tr = torch.arange(T, device=dev)[None]
-                for _ in range(max(1, T // 200)):
-                    w = torch.randint(0, 25, (B, 1), device=dev); s0 = (torch.rand(B, 1, device=dev) * (fl[:, None] - w).clamp(min=1)).long()
-                    f = f.masked_fill(((tr >= s0) & (tr < s0 + w))[:, :, None], 0.0)
+            f, fl = make_feats(wav, lens)
             chunk = 0 if (not a.stream or random.random() < a.p_full) else random.choice(chunks)
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+            with torch.autocast(dev, dtype=torch.bfloat16, enabled=dev == "cuda"):
                 lg, ol = model(f, fl, chunk, random.choice(lefts) if chunk else 0)
             lp = lg.float().log_softmax(-1)
             loss = F.ctc_loss(lp.transpose(0, 1), tokb, ol, tl, blank=V, reduction="sum", zero_infinity=True) / tl.sum()
-            if a.kd and chunk:
-                with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
+            if a.kd and chunk and step >= a.kd_start:
+                with torch.no_grad(), torch.autocast(dev, dtype=torch.bfloat16, enabled=dev == "cuda"):
                     tg, _ = ema(f, fl, 0, 0)
                 tp = tg.float().log_softmax(-1)
                 valid = (torch.arange(lp.shape[1], device=dev)[None] < ol[:, None]).float()
