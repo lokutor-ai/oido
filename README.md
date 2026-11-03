@@ -12,7 +12,7 @@ Speech-to-text for any English or Spanish sentence, running entirely on an **ESP
 Models on Hugging Face: [int8](https://huggingface.co/lokutor-ai/oido-ctc-small-int8) ·
 [int4](https://huggingface.co/lokutor-ai/oido-ctc-small-int4).
 
-**[Audio samples](https://lokutor-ai.github.io/oido/)**: random clips in a quiet room, a car, a kitchen, a cafeteria,
+**[Try it in your browser](https://lokutor-ai.github.io/oido/demo/)**: the same C engine and int4 model as the chip, compiled to WebAssembly (microphone or upload, nothing leaves your device) · **[Audio samples](https://lokutor-ai.github.io/oido/)**: random clips in a quiet room, a car, a kitchen, a cafeteria,
 reverberant rooms and real meetings, each with the reference, the on-chip transcript (errors marked) and the compute
 it took on the chip.
 
