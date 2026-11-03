@@ -7,5 +7,5 @@ TAG=$1; MODEL=$2; LM=$3; CFG=$4
 if [ -n "$5" ]; then export TASR_QUICK=1; fi
 if [ -n "$CFG" ]; then export TASR_EXTRA_CFG="$CFG"; fi
 LMARG="--no-lm"; [ "$LM" != none ] && LMARG="--lm $LM"
-python tools/board_bench.py --port /dev/cu.usbmodem5CF70368481 --model ../models/$MODEL.tnm $LMARG --clips ${CLIPS:-bench/clips.json} --limit ${LIMIT:-8} --batch ${BATCH:-9} --out bench/r_$TAG.json > bench/r_$TAG.out 2>&1
+python tools/board_bench.py --port ${PORT:-/dev/cu.usbmodem5CF70368481} --model ../models/$MODEL.tnm $LMARG --clips ${CLIPS:-bench/clips.json} --limit ${LIMIT:-8} --batch ${BATCH:-9} --out bench/r_$TAG.json > bench/r_$TAG.out 2>&1
 echo "DONE $TAG: $(grep TOTAL bench/r_$TAG.out)"

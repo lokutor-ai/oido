@@ -75,6 +75,7 @@ Measured on a board (one core, 240 MHz, 18 clips of 120 s, language model on):
 | 1.28 s chunks instead of 0.64 s (`sdkconfig.chunk16`) | 0.61, 658 ms | |
 | Long utterances: 8 runs of 15-89 s of continuous speech into one stream, audio at real-time speed | 353-634 ms (mean 500) | 178-448 ms (mean 336) |
 | Board transcripts equal the host build's | 18 / 18 | 18 / 18 |
+| Same figures on a second board | RTF 0.698, 407 ms (identical) | RTF 0.537, 259 ms (identical) |
 
 LibriSpeech word error rate (%), host build of the same engine, test-clean / test-other:
 
