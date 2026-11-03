@@ -40,6 +40,12 @@ menu "tinyasr"
         default 300
         depends on TASR_STREAM_ONLY
 
+    config TASR_BENCH_REPEAT
+        int "Paced benchmark: feed each clip this many times in a row into one stream (long-utterance test)"
+        default 1
+        range 1 64
+        depends on TASR_BENCH_PACED
+
     config TASR_EXP_NO_WPF
         bool "Experiment: no weight preload into the D-cache (kernels.c tasr_wpf = 0)"
         default n

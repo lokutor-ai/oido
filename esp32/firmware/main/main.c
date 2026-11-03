@@ -238,19 +238,22 @@ static void run_nemo(const uint8_t *blob, uint32_t blob_size)
 #ifdef CONFIG_TASR_BENCH_PACED
             tasr_nemo_stream_reset(st);
             const int64_t p0 = esp_timer_get_time();
-            for (uint32_t o = 0; o < ns; o += 320) {
-                const uint32_t nb = ns - o < 320 ? ns - o : 320;
-                const int64_t due = p0 + (int64_t)(o + nb) * 1000000 / 16000;  // a block is complete when its last sample has been spoken
-                for (int64_t now = esp_timer_get_time(); now < due; now = esp_timer_get_time())
-                    if (due - now > 12000) vTaskDelay(1);
-                tasr_nemo_stream_feed(st, pcm + o, nb);
-            }
+            uint64_t cum = 0;   // samples spoken so far; the clip is repeated CONFIG_TASR_BENCH_REPEAT times into the same stream (long-utterance test)
+            for (int rep = 0; rep < CONFIG_TASR_BENCH_REPEAT; rep++)
+                for (uint32_t o = 0; o < ns; o += 320) {
+                    const uint32_t nb = ns - o < 320 ? ns - o : 320;
+                    cum += nb;
+                    const int64_t due = p0 + (int64_t)(cum * 1000000 / 16000);  // a block is complete when its last sample has been spoken
+                    for (int64_t now = esp_timer_get_time(); now < due; now = esp_timer_get_time())
+                        if (due - now > 12000) vTaskDelay(1);
+                    tasr_nemo_stream_feed(st, pcm + o, nb);
+                }
             const int64_t p1 = esp_timer_get_time();
             tasr_nemo_stream_finish(st, text, sizeof(text));
             const int64_t p2 = esp_timer_get_time();
-            const int64_t eos = (int64_t)ns * 1000000 / 16000;  // end of speech, relative to p0
+            const int64_t eos = (int64_t)(cum * 1000000 / 16000);  // end of speech, relative to p0
             printf("PACED %u | audio %.2fs | last block fed %lld ms after the end of speech | final text %lld ms after the end of speech\nPHYP: %s\n",
-                   (unsigned)u, sec, (long long)((p1 - p0 - eos) / 1000), (long long)((p2 - p0 - eos) / 1000), text);
+                   (unsigned)u, sec * CONFIG_TASR_BENCH_REPEAT, (long long)((p1 - p0 - eos) / 1000), (long long)((p2 - p0 - eos) / 1000), text);
 #endif
         }
     }

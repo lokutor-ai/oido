@@ -96,9 +96,9 @@ def parse(text):
                 cur.update(stream_feed_us=int(w.group(1)), stream_finish_us=int(w.group(2)))
         if line.startswith("SHYP: ") and cur is not None:
             cur["shyp"] = line[6:].strip()
-        m = re.match(r"PACED (\d+) \| audio [\d.]+s \| last block fed (-?\d+) ms after the end of speech \| final text (-?\d+) ms", line)
+        m = re.match(r"PACED (\d+) \| audio ([\d.]+)s \| last block fed (-?\d+) ms after the end of speech \| final text (-?\d+) ms", line)
         if m and cur is not None:
-            cur.update(paced_last_block_ms=int(m.group(2)), paced_final_ms=int(m.group(3)))
+            cur.update(paced_audio=float(m.group(2)), paced_last_block_ms=int(m.group(3)), paced_final_ms=int(m.group(4)))
         if line.startswith("PHYP: ") and cur is not None:
             cur["phyp"] = line[6:].strip()
     mem = re.search(r"MEM min free PSRAM (\d+) internal (\d+)", text)

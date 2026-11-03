@@ -73,6 +73,7 @@ Measured on a board (one core, 240 MHz, 18 clips of 120 s, language model on):
 | Compute left after the last sample | 289 ms | 198 ms |
 | Final text after the end of speech, audio fed at real-time speed (8 clips) | 431 ms (281-574) | 259 ms (159-391) |
 | 1.28 s chunks instead of 0.64 s (`sdkconfig.chunk16`) | 0.61, 658 ms | |
+| Long utterances: 8 runs of 15-89 s of continuous speech into one stream, audio at real-time speed | 353-634 ms (mean 500) | 178-448 ms (mean 336) |
 | Board transcripts equal the host build's | 18 / 18 | 18 / 18 |
 
 LibriSpeech word error rate (%), host build of the same engine, test-clean / test-other:
@@ -82,6 +83,8 @@ LibriSpeech word error rate (%), host build of the same engine, test-clean / tes
 | Streaming, 0.64 s chunks | 10.01 / 19.90 | **7.14 / 16.37** (beam 4 / top 6); 7.81 / 17.29 (2 / 3) | 13.43 / 26.10 | 9.74 / 21.28 (4 / 6); **10.63 / 22.42** (2 / 3) |
 | Streaming, 1.28 s chunks | 8.02 / 17.00 | 5.96 / 14.03 | 10.68 / 22.37 | 8.08 / 18.45 |
 | Full context | 5.66 / 12.79 | 4.58 / 10.71 | 7.72 / 17.34 | 6.15 / 14.41 |
+
+The delay above is measured from the end of speech as the engine receives it. The firmware's own end-of-speech detector waits 0.8 s of silence by default (`CONFIG_TASR_SEG_HANG_MS`), so the text appears about 1.1 s (B) to 1.3 s (A) after the speaker stops; to get under 1 s, lower that wait (about 0.4 s for B, 0.3 s for A), at the cost of cutting slow speakers at pauses.
 
 What this does not give you: noisy ("other") speech below 10 % in streaming mode, a bilingual or Spanish v2 model, two-core operation, or the live-microphone mode measured (the microphone ring and the 20 s recording buffer take
 0.9 MB of PSRAM, which pushes more weights to flash; with the microphone's PSRAM budget the benchmark build measures about 0.015 more, 0.71 for A and 0.55 for B; the I2S capture path itself was not measured because the test board has no microphone). Details, the ablation of each change and the bandwidth table are in the paper (Section 6) and in
