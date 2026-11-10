@@ -1,6 +1,6 @@
 """Spanish ASR data: download from Hugging Face, convert to 16 kHz mono FLAC, write jsonl manifests.
 
-Sources (all allow a CC-BY model):
+Sources (all CC0 or CC-BY, which allow a released model under CC BY-NC-SA 4.0):
   Common Voice 17 es (CC0, HF mirror fsicoli/common_voice_17_0), VoxPopuli es (CC0), Multilingual LibriSpeech es
   (CC-BY-4.0), FLEURS es_419 (CC-BY-4.0).
 
