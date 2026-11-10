@@ -94,6 +94,10 @@ def parse(text):
             w = re.search(r"feed wall (\d+) us \| finish wall (\d+) us", line)
             if w:
                 cur.update(stream_feed_us=int(w.group(1)), stream_finish_us=int(w.group(2)))
+                cur["wall_us"] = cur["stream_feed_us"] + cur["stream_finish_us"]
+                cur["rtf"] = cur["wall_us"] / 1e6 / cur["audio"]
+            else:
+                cur["rtf"] = (cur["stream_feed"] + cur["stream_finish"]) / 240e6 / cur["audio"]
         if line.startswith("SHYP: ") and cur is not None:
             cur["shyp"] = line[6:].strip()
         m = re.match(r"PACED (\d+) \| audio ([\d.]+)s \| last block fed (-?\d+) ms after the end of speech \| final text (-?\d+) ms", line)
