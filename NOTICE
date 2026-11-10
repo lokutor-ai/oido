@@ -1,16 +1,29 @@
 Oído (github.com/lokutor-ai/oido)
 Copyright (C) 2026 Hashing Works, S.L.L. (Lokutor)
 
-The source code in this repository is licensed under the GNU General Public License v3 (see LICENSE). Commercial
-licenses are available (see COMMERCIAL.md).
+Licenses
+--------
+- Source code (everything except the files in models/): GNU GPL v3 (LICENSE). Commercial licenses are available
+  (COMMERCIAL.md).
+- Model files in models/: one license per file, listed in models/LICENSE-WEIGHTS.
+  Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode),
+  together with Lokutor's terms of use (models/TERMS.md), for nemo8.tnm, oido_es.tnm, nemo_lm.tlm, oido_v2.tlm,
+  oido_es.tlm and oido_es/tokenizer.model. Commercial use of these needs a written license from Lokutor.
+  Creative Commons Attribution-ShareAlike 4.0 (CC-BY-SA-4.0) for nemo4.tnm, oido_stream.tnm, oido_v2a.tnm and
+  oido_v2b.tnm, which were fine-tuned on share-alike data and so cannot be made non-commercial.
+  Creative Commons Attribution 4.0 (CC-BY-4.0) for nemo_small/tokenizer.model, which is NVIDIA's file, unmodified.
+- These terms apply to the files released from the commit that added models/LICENSE-WEIGHTS on. Copies obtained earlier
+  keep the license they were released under (CC-BY-4.0 for the files now under CC BY-NC-SA 4.0).
 
-Model weights
--------------
+Model weights: origin and attributions
+--------------------------------------
 models/nemo8.tnm contains weights derived from NVIDIA's "stt_en_conformer_ctc_small" (NVIDIA NeMo), licensed under the
 Creative Commons Attribution 4.0 International License (CC-BY-4.0), https://creativecommons.org/licenses/by/4.0/.
 Changes: re-implemented in PyTorch (train/nemo_small.py), quantized to int8 and packed into the TNM1 format
-(train/export_nemo.py). models/nemo_small/tokenizer.model is the model's original SentencePiece tokenizer. nemo8.tnm
-and the tokenizer remain available under CC-BY-4.0.
+(train/export_nemo.py). models/nemo_small/tokenizer.model is the model's original SentencePiece tokenizer, unmodified; it
+stays under CC-BY-4.0. nemo8.tnm, as modified by Lokutor, is released under CC BY-NC-SA 4.0 with Lokutor's terms of use
+(see Licenses); NVIDIA's original model remains available from NVIDIA under CC-BY-4.0, and the attribution above must be
+kept.
 
 models/nemo4.tnm is the same NVIDIA model, fine-tuned by Lokutor with 4-bit quantization-aware training (8,000 steps)
 on public speech corpora and quantized to int4. Fine-tuning data:
@@ -45,10 +58,12 @@ corpora as oido_stream, with every LibriSpeech development/test text removed):
 - augmentation with noise, music and speech from MUSAN (CC-BY-4.0) and simulated room impulse responses.
 Because of the share-alike sources, oido_v2a.tnm and oido_v2b.tnm are released under CC-BY-SA-4.0,
 https://creativecommons.org/licenses/by-sa/4.0/. models/oido_v2.tlm is models/nemo_lm.tlm (same network weights) with the beam-search weights tuned
-for these models (0.30, token bonus 1.0) stored in its header; CC-BY-4.0.
+for these models (0.30, token bonus 1.0) stored in its header; released under CC BY-NC-SA 4.0 (its text sources are
+public domain; the models oido_v2a.tnm and oido_v2b.tnm are CC-BY-SA-4.0 and run without it).
 
 models/oido_es.tnm is the same NVIDIA model with a new 1,024-piece Spanish SentencePiece vocabulary
-(models/oido_es/tokenizer.model, trained by Lokutor on the training transcripts), fine-tuned by Lokutor for Spanish and
+(models/oido_es/tokenizer.model, trained by Lokutor on the training transcripts, which are CC0 or CC-BY; the tokenizer is
+released under CC BY-NC-SA 4.0), fine-tuned by Lokutor for Spanish and
 quantized to int8. Fine-tuning data (2,492 hours):
 - Common Voice 17 Spanish (CC0), including its unvalidated clips, which were kept only where NVIDIA's
   stt_es_conformer_ctc_large (CC-BY-4.0, https://huggingface.co/nvidia/stt_es_conformer_ctc_large) transcribed them
@@ -56,16 +71,18 @@ quantized to int8. Fine-tuning data (2,492 hours):
   this release;
 - VoxPopuli Spanish (CC0), Multilingual LibriSpeech Spanish (CC-BY-4.0), FLEURS es_419 (CC-BY-4.0);
 - augmentation with noise, music and speech from MUSAN (CC-BY-4.0) and simulated room impulse responses.
-All sources are CC0 or CC-BY, so oido_es.tnm is released under CC-BY-4.0, https://creativecommons.org/licenses/by/4.0/.
+All sources are CC0 or CC-BY, which allow a more restrictive license for Lokutor's adaptation, so oido_es.tnm is
+released under CC BY-NC-SA 4.0 with Lokutor's terms of use (see Licenses). The NVIDIA attribution above applies to it.
 
 models/oido_es.tlm is a GRU language model (1.3 M parameters) over the Spanish vocabulary, trained by Lokutor on the
 Multilingual LibriSpeech Spanish LM corpus (public-domain book text, CC-BY-4.0, https://www.openslr.org/94/), the Common
 Voice Spanish sentence collection (CC0) and VoxPopuli Spanish transcripts (CC0), with every development and test
-sentence removed. It is released under CC-BY-4.0. Its recommended beam-search weights are stored in its header.
+sentence removed. All its text sources are CC0, CC-BY or public domain. It is released under CC BY-NC-SA 4.0 with
+Lokutor's terms of use. Its recommended beam-search weights are stored in its header.
 
 models/nemo_lm.tlm is a GRU language model (1.3 M parameters) trained by Lokutor on the LibriSpeech language-modeling
 corpus (public domain text from 14,500 books, https://www.openslr.org/11/), over the vocabulary of NVIDIA's tokenizer. It
-is released under CC-BY-4.0.
+is released under CC BY-NC-SA 4.0 with Lokutor's terms of use (its text sources are public domain).
 
 NVIDIA's "stt_en_conformer_transducer_small" is supported by the engine but not included; it is distributed by NVIDIA
 on NGC under the NGC Terms of Use.
