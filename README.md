@@ -5,7 +5,7 @@
 [![Oído demo: speech recognition on a $5 chip](docs/demo.gif)](https://huggingface.co/lokutor-ai/oido-ctc-small-int8/blob/main/demo.mp4)
 
 *Animated demo; [full video with sound](https://huggingface.co/lokutor-ai/oido-ctc-small-int8/blob/main/demo.mp4).
-The transcripts are Oído's output, sped up. Footage from a physical board is coming.*
+The transcripts are Oído's output, sped up. Board runs are described in the 'Real time (v2)' section.*
 
 Speech-to-text for any English or Spanish sentence, running entirely on an **ESP32-S3** (240 MHz dual-core Xtensa LX7, 8 MB PSRAM,
 16 MB flash). No cloud, no command list, no neural accelerator. Built by [Lokutor](https://lokutor.com).
@@ -43,7 +43,7 @@ There is **one model per language**, and the models that stream also run in full
 |---|---|---|---|---|---|
 | **Real time on the chip**, best accuracy | `models/oido_v2a.tnm` + `oido_v2.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-v2-realtime-int4)) | English | **streaming** (RTF 0.72; final text 431 ms after the end of speech) and full-context | 7.7 + 1.3 MB | `.tnm` CC-BY-SA-4.0, `.tlm` CC BY-NC-SA 4.0 + [terms](models/TERMS.md) |
 | **Real time on the chip**, fastest | `models/oido_v2b.tnm` + `oido_v2.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-v2-realtime-int4)) | English | **streaming** (RTF 0.54; final text 259 ms) and full-context | 5.9 + 1.3 MB | `.tnm` CC-BY-SA-4.0, `.tlm` CC BY-NC-SA 4.0 + [terms](models/TERMS.md) |
-| The best English accuracy | `models/nemo8.tnm` + `nemo_lm.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-ctc-small-int8)) | English | utterance only: text about 3 s after you stop | 14.0 + 1.3 MB | CC BY-NC-SA 4.0 + [terms](models/TERMS.md) |
+| The best English accuracy | `models/nemo8.tnm` + `nemo_lm.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-ctc-small-int8)) | English | utterance only: text about 7 s after you stop for a 3.7 s command, plus the 0.8 s end-of-speech wait | 14.0 + 1.3 MB | CC BY-NC-SA 4.0 + [terms](models/TERMS.md) |
 | English with the least flash | `models/nemo4.tnm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-ctc-small-int4)) | English | utterance only | 8.3 MB | CC-BY-SA-4.0 |
 | English, low latency (voice agents) | `models/oido_stream.tnm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-ctc-small-stream-int8)) | English | **streaming** (final text about 4 s after a 4 s command ends, measured; see [below](#low-latency-streaming-mode)) and full-context | 14.0 MB | CC-BY-SA-4.0 |
 | Spanish | `models/oido_es.tnm` + `oido_es.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-es-ctc-small-int8)) | Spanish | **streaming and full-context, in the same file** | 14.0 + 1.3 MB | CC BY-NC-SA 4.0 + [terms](models/TERMS.md) |
@@ -75,7 +75,7 @@ Measured on a board (one core, 240 MHz, 18 clips of 120 s, language model on):
 | 1.28 s chunks instead of 0.64 s (`sdkconfig.chunk16`) | 0.61, 658 ms | |
 | Long utterances: 8 runs of 15-89 s of continuous speech into one stream, audio at real-time speed | 353-634 ms (mean 500) | 178-448 ms (mean 336) |
 | Board transcripts equal the host build's | 18 / 18 | 18 / 18 |
-| Same figures on a second board | RTF 0.698, 407 ms (identical) | RTF 0.537, 259 ms (identical) |
+| Re-run on the same board (`esp32/bench/r_fin_a2final.json`, `r_fin_b3final.json`, `r_finp_*.json`) | RTF 0.698, 407 ms (identical) | RTF 0.537, 259 ms (identical) |
 
 LibriSpeech word error rate (%), host build of the same engine, test-clean / test-other:
 
@@ -123,13 +123,13 @@ Word error rate (%) on LibriSpeech, same text normalization for every system.
 - The int8 engine is within 0.1 points of full precision: 3.70 / 8.23 on chip vs 3.68 / 8.11 for the original fp32 model.
 - The language model is a 1.3 M-parameter GRU trained only on public-domain books (the LibriSpeech LM corpus). The
   device runs CTC prefix beam search with it (beam 4). It is optional: without it the engine decodes greedily.
-- To our knowledge this is the most accurate LibriSpeech result published for any microcontroller. It is not the first
+- To our knowledge, this is the most accurate LibriSpeech result for a microcontroller that we are aware of (November 2026). It is not the first
   open-vocabulary recognizer on one (Arm has shown Conformer models on Cortex-M55 + Ethos-U NPUs).
 
 **Robustness** (300 LibriSpeech utterances under real DEMAND noise, babble and room reverb; `eval/make_robust.py`,
 full numbers in [`results/robustness.json`](results/robustness.json)):
 
-| Mean WER over 14 conditions | CTC int8 (chip) | CTC int8 + LM (chip) | Transducer int8 (chip) | Whisper tiny.en | Moonshine tiny | Vosk small |
+| Mean WER over 14 conditions | CTC int8 (chip) | CTC int8 + LM (chip) | Transducer int8 (chip; weights fetched from NVIDIA, not in the repo) | Whisper tiny.en | Moonshine tiny | Vosk small |
 |---|---|---|---|---|---|---|
 | | **8.4** | 7.5 | 6.7 | 12.1 | 12.2 | 21.7 |
 
@@ -192,7 +192,7 @@ Measured on one ESP32-S3-WROOM-1-N16R8 board (DevKitC-1 class), ESP-IDF 5.5.1, C
 | Compute | the board spends 461 M cycles per second of audio, **2.0 cycles per executed instruction**: every stage costs 1.3–2.4 cycles per instruction (the im2col gather 3.7), so on one core the time is set by the number of instructions the kernels issue, not by waiting for weights. 220 M instructions per second of audio across both cores (exact, QEMU `-icount`) |
 | Latency, utterance mode | the text of a 3.6–3.8 s command appears 6.9–7.4 s after it ends, plus the 0.8 s end-of-speech wait |
 | Latency, streaming mode | 4.1–4.2 s after a 3.6–3.8 s command ends (see [below](#low-latency-streaming-mode)) |
-| What would make it real time | the second core (a perfect split of the 55 % of instructions on the critical path would give about 1.1×; not measured) and faster kernels. Both are open, see [Dual core](#dual-core) |
+| What would make it real time | the second core (a perfect two-core split of the 55 % critical-path share would give about 1.4× (Amdahl); one partial split was measured: RTF 1.84 against 1.92 on one core, see [Dual core](#dual-core)) and faster kernels. Both are open, see [Dual core](#dual-core) |
 
 The firmware's transcripts equal the emulator's on all 27 clips, and for the two clips we traced layer by layer the activations
 of every stage are bit-identical between the board and the emulator. The host build differs in the last bit of the log-mel
@@ -348,7 +348,8 @@ train/                     PyTorch port of NVIDIA's model (nemo_small.py, rnnt_s
 eval/                      WER normalization, robustness benchmark builder, laptop baselines
 results/                   benchmark outputs behind the numbers above
 models/                    nemo8.tnm (int8, 14.0 MB), nemo4.tnm (int4, 8.3 MB), oido_stream.tnm (streaming int8, 14.0 MB),
-                           nemo_lm.tlm (language model, 1.3 MB), oido_es.tnm + oido_es.tlm (Spanish, 14.0 + 1.3 MB), and the tokenizers
+                           nemo_lm.tlm (language model, 1.3 MB), oido_es.tnm + oido_es.tlm (Spanish, 14.0 + 1.3 MB),
+                           oido_v2a.tnm (7.7 MB), oido_v2b.tnm (5.9 MB), oido_v2.tlm (1.3 MB), and the tokenizers
 ```
 
 ## Limitations
@@ -356,7 +357,7 @@ models/                    nemo8.tnm (int8, 14.0 MB), nemo4.tnm (int4, 8.3 MB), 
 - English and Spanish only.
 - Utterance mode prints text after each utterance; streaming mode shows partial text but is less accurate (see above).
 - Very noisy crowds and reverberant rooms remain hard.
-- Speed: about twice slower than real time on one core today (see [Speed and memory](#speed-and-memory)); the two-core mode is not correct on silicon yet.
+- Speed: the v1 English and Spanish models run at about 2× real time on one core; the v2 models run at RTF 0.54–0.72 (see 'Real time (v2)' and [Speed and memory](#speed-and-memory)); the two-core mode is not correct on silicon yet.
 - Requires an ESP32-S3 with 16 MB flash and 8 MB octal PSRAM (N16R8).
 - Known issue: the one-shot batch `transcribe` call inside a live microphone capture loop hangs on the chip, although the same call works on clips stored in flash and streaming works in the live loop. The cause is not understood; use streaming for live capture.
 
