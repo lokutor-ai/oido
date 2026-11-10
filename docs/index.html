@@ -31,8 +31,7 @@ good, and every error is shown: <span class="err">wrong or extra words</span> in
 on-chip language model) running on a physical ESP32-S3 board. The laptop build of the same C code gives an
 identical transcript on 22 of these 27 clips; on the others the laptop's math library rounds the last
 bit differently from the chip's and a word or two changes, always on the hard (noisy) clips. <i>Compute on the
-board</i> is the time the chip took, measured with its 64-bit timer, on one of its two cores; the chip does not run in
-real time yet (RTF is compute time divided by the length of the audio, here about 2). The same firmware in the
+board</i> is the time the chip took, measured with its 64-bit timer, on one of its two cores (RTF is compute time divided by the length of the audio). This v1 demo ran at RTF about 2. The v2 models run faster than real time (RTF 0.54–0.72 on one core; see the README). The same firmware in the
 emulator produced the same transcripts. Text appears after a 0.8 s pause plus this compute time.</p>
 
 <h2>Same sentence, different rooms</h2>
