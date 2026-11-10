@@ -41,12 +41,12 @@ There is **one model per language**, and the models that stream also run in full
 
 | I want | Use | Language | Modes | Size | License |
 |---|---|---|---|---|---|
-| **Real time on the chip**, best accuracy | `models/oido_v2a.tnm` + `oido_v2.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-v2-realtime-int4)) | English | **streaming** (RTF 0.72; final text 431 ms after the end of speech) and full-context | 7.7 + 1.3 MB | CC-BY-SA-4.0 |
-| **Real time on the chip**, fastest | `models/oido_v2b.tnm` + `oido_v2.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-v2-realtime-int4)) | English | **streaming** (RTF 0.54; final text 259 ms) and full-context | 5.9 + 1.3 MB | CC-BY-SA-4.0 |
-| The best English accuracy | `models/nemo8.tnm` + `nemo_lm.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-ctc-small-int8)) | English | utterance only: text about 3 s after you stop | 14.0 + 1.3 MB | CC-BY-4.0 |
+| **Real time on the chip**, best accuracy | `models/oido_v2a.tnm` + `oido_v2.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-v2-realtime-int4)) | English | **streaming** (RTF 0.72; final text 431 ms after the end of speech) and full-context | 7.7 + 1.3 MB | `.tnm` CC-BY-SA-4.0, `.tlm` CC BY-NC-SA 4.0 + [terms](models/TERMS.md) |
+| **Real time on the chip**, fastest | `models/oido_v2b.tnm` + `oido_v2.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-v2-realtime-int4)) | English | **streaming** (RTF 0.54; final text 259 ms) and full-context | 5.9 + 1.3 MB | `.tnm` CC-BY-SA-4.0, `.tlm` CC BY-NC-SA 4.0 + [terms](models/TERMS.md) |
+| The best English accuracy | `models/nemo8.tnm` + `nemo_lm.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-ctc-small-int8)) | English | utterance only: text about 3 s after you stop | 14.0 + 1.3 MB | CC BY-NC-SA 4.0 + [terms](models/TERMS.md) |
 | English with the least flash | `models/nemo4.tnm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-ctc-small-int4)) | English | utterance only | 8.3 MB | CC-BY-SA-4.0 |
 | English, low latency (voice agents) | `models/oido_stream.tnm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-ctc-small-stream-int8)) | English | **streaming** (final text about 4 s after a 4 s command ends, measured; see [below](#low-latency-streaming-mode)) and full-context | 14.0 MB | CC-BY-SA-4.0 |
-| Spanish | `models/oido_es.tnm` + `oido_es.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-es-ctc-small-int8)) | Spanish | **streaming and full-context, in the same file** | 14.0 + 1.3 MB | CC-BY-4.0 |
+| Spanish | `models/oido_es.tnm` + `oido_es.tlm` ([Hugging Face](https://huggingface.co/lokutor-ai/oido-es-ctc-small-int8)) | Spanish | **streaming and full-context, in the same file** | 14.0 + 1.3 MB | CC BY-NC-SA 4.0 + [terms](models/TERMS.md) |
 
 - **Streaming vs utterance:** `oido_stream.tnm` and `oido_es.tnm` carry a streaming flag. The firmware's microphone mode and
   `live_demo.py` stream with them automatically; the full-context (utterance) accuracy figures in the tables come from the
@@ -62,7 +62,7 @@ There is **one model per language**, and the models that stream also run in full
 Version 1 spent its time on memory traffic, not on arithmetic: a streaming recognizer re-reads every weight for every chunk, and the chip reads internal SRAM at 3.8 GB/s,
 PSRAM at 89 MB/s and flash at 32 MB/s (measured, [`esp32/tools/gemm_bench`](esp32/tools/gemm_bench)). Version 2 changes the model and the engine to fit that:
 
-- **Model** (`models/oido_v2a.tnm`, `models/oido_v2b.tnm`, int4 quantization-aware training; license CC-BY-SA-4.0): 80 ms encoder frames (pairs of frames are stacked), a 64-channel convolutional front end, 16 blocks (A) or 12 blocks (B), 7.7 / 5.9 MB.
+- **Model** (`models/oido_v2a.tnm`, `models/oido_v2b.tnm`, int4 quantization-aware training; license CC-BY-SA-4.0; the language model `oido_v2.tlm` is CC BY-NC-SA 4.0): 80 ms encoder frames (pairs of frames are stacked), a 64-channel convolutional front end, 16 blocks (A) or 12 blocks (B), 7.7 / 5.9 MB.
 - **Engine**: the ROM's asynchronous data-cache preload overlaps the weight stream with computation (layers 38-41 % faster, bit-identical), streaming state first and weights in the rest of PSRAM, work buffers in SRAM, table-driven exp/tanh/sigmoid, a blank-frame shortcut and a beam-2 option in the decoder, deterministic math so that the host build and the chip print identical transcripts (18 of 18 test clips).
 
 Measured on a board (one core, 240 MHz, 18 clips of 120 s, language model on):
@@ -362,12 +362,29 @@ models/                    nemo8.tnm (int8, 14.0 MB), nemo4.tnm (int4, 8.3 MB), 
 
 ## License
 
-- **Code** is licensed under the **GNU GPL v3** ([`LICENSE`](LICENSE)).
-- For products that cannot meet GPLv3 terms (for example, consumer devices that do not allow users to install modified
+Oído has two parts, under different licenses:
+
+- **Code** (everything except `models/`): **GNU GPL v3** ([`LICENSE`](LICENSE)). The GPL allows commercial use *of the
+  code*. For products that cannot meet GPLv3 terms (for example, consumer devices that do not allow users to install modified
   firmware), Lokutor offers commercial licenses and support. See [`COMMERCIAL.md`](COMMERCIAL.md).
-- **Model weights** are derived from NVIDIA's `stt_en_conformer_ctc_small`: `nemo8.tnm` is under **CC-BY-4.0**,
-  while `nemo4.tnm` and `oido_stream.tnm` (fine-tuned on public corpora that include share-alike data) are under
-  **CC-BY-SA-4.0**. The language model `nemo_lm.tlm` is under **CC-BY-4.0**. The Spanish model `oido_es.tnm`
-  (fine-tuned only on CC0 and CC-BY data) and its language model `oido_es.tlm` are under **CC-BY-4.0**. See [`NOTICE`](NOTICE).
+- **Model files** (`models/`): one license per file, listed in [`models/LICENSE-WEIGHTS`](models/LICENSE-WEIGHTS). The GPL
+  on the code does **not** cover them.
+  - **CC BY-NC-SA 4.0** ([legal code](https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode)), plus Lokutor's
+    [terms of use](models/TERMS.md): `nemo8.tnm`, `oido_es.tnm`, the language models `nemo_lm.tlm`, `oido_v2.tlm` and
+    `oido_es.tlm`, and the Spanish tokenizer `oido_es/tokenizer.model`. **Any commercial use of these needs a written
+    license from Lokutor.** That includes products, paid services and internal business use. The same applies to files
+    derived from them. Hobby, research and education use is welcome. `nemo8.tnm` and the Spanish model are adapted from
+    NVIDIA's `stt_en_conformer_ctc_small` (CC-BY-4.0); the NVIDIA attribution is kept in [`NOTICE`](NOTICE).
+  - **CC-BY-SA-4.0**: `nemo4.tnm`, `oido_stream.tnm`, `oido_v2a.tnm` and `oido_v2b.tnm`. They were fine-tuned on data that
+    includes share-alike corpora (OpenSLR 70 and 83), so Lokutor cannot make them non-commercial: they may be used
+    commercially under the CC-BY-SA-4.0 terms. Without `oido_v2.tlm` the engine decodes greedily, at a higher error rate.
+  - **CC-BY-4.0**: `nemo_small/tokenizer.model`, NVIDIA's original tokenizer, unmodified.
+  - These terms apply to the files released from the commit that added `models/LICENSE-WEIGHTS` on. Copies of the files
+    that are now CC BY-NC-SA 4.0 that you obtained earlier (earlier commits, earlier Hugging Face downloads) keep the
+    CC-BY-4.0 license they were released under.
+- Where each model comes from and the third-party attributions are in [`NOTICE`](NOTICE).
+
+**Commercial licenses** (for the code without GPL obligations, and for the non-commercial model files), and no-cost
+licenses for collaborations: **contact@lokutor.com**. See [`COMMERCIAL.md`](COMMERCIAL.md).
 
 Lokutor also has models for other languages (Catalan, Basque, Galician and more) and an on-device TTS for the same chip. Contact us for these.
