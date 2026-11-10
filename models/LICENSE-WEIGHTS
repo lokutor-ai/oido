@@ -1,0 +1,66 @@
+Oído model files
+Copyright (C) 2026 Hashing Works, S.L.L. (Lokutor)
+
+This file says which license applies to each file in models/ and to the same files distributed through
+huggingface.co/lokutor-ai (see ../NOTICE for where each model comes from).
+
+1. Licensed under CC BY-NC-SA 4.0 plus Lokutor's terms
+------------------------------------------------------
+These files, and any copy of them embedded in another file, are licensed under the Creative Commons
+Attribution-NonCommercial-ShareAlike 4.0 International License (CC BY-NC-SA 4.0):
+
+    https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+    (summary: https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
+    models/nemo8.tnm            English, int8
+    models/nemo_lm.tlm          English language model
+    models/oido_v2.tlm          English language model for oido_v2a.tnm and oido_v2b.tnm
+    models/oido_es.tnm          Spanish, int8
+    models/oido_es.tlm          Spanish language model
+    models/oido_es/tokenizer.model   Spanish tokenizer, trained by Lokutor
+
+In short: you may use, share and adapt these files for NON-COMMERCIAL purposes, with attribution, and you must share
+adaptations under the same license.
+
+Commercial use requires a separate written license from Lokutor. This includes, among other things, use in products
+or devices, in paid services or APIs, and internal business use.
+
+Adapted material, under the license's own terms, includes files that are fine-tuned, distilled, pruned, quantized,
+converted or otherwise derived from these files. Such files stay under CC BY-NC-SA 4.0.
+
+Lokutor's terms of use (TERMS.md) accompany the download and add to this license. They do not conflict with it.
+
+Attribution: "Oído model by Lokutor (lokutor.com), CC BY-NC-SA 4.0". nemo8.tnm, oido_es.tnm and the Spanish files
+also keep the NVIDIA attribution in ../NOTICE: they were adapted from NVIDIA's stt_en_conformer_ctc_small
+(CC-BY-4.0), with the changes listed there. Lokutor's changes and the file as a whole are under CC BY-NC-SA 4.0.
+NVIDIA's original model stays available from NVIDIA under CC-BY-4.0, and nothing here restricts what you do with it.
+
+2. Not covered by this license
+------------------------------
+These files keep the license they have always had:
+
+    models/nemo4.tnm            CC-BY-SA-4.0
+    models/oido_stream.tnm      CC-BY-SA-4.0
+    models/oido_v2a.tnm         CC-BY-SA-4.0
+    models/oido_v2b.tnm         CC-BY-SA-4.0
+    models/nemo_small/tokenizer.model   CC-BY-4.0 (NVIDIA's original tokenizer, not modified)
+
+Why. The four CC-BY-SA-4.0 models were fine-tuned on data that includes OpenSLR 70 and 83 (CC-BY-SA-4.0) and
+People's Speech (whose material is CC-BY or CC-BY-SA). Share-alike means the result has to be shared under
+CC-BY-SA-4.0 too, so Lokutor cannot add a non-commercial restriction to them. They may be used commercially under the
+terms of CC-BY-SA-4.0 (attribution, same license for adaptations). The tokenizer is NVIDIA's file, unchanged, so it keeps
+NVIDIA's license.
+
+Language models. The English models oido_v2a.tnm and oido_v2b.tnm are CC-BY-SA-4.0, but their language model
+oido_v2.tlm is CC BY-NC-SA 4.0. The engine decodes without a language model (greedy decoding), at a higher word error
+rate, so the CC-BY-SA models can be used commercially on their own.
+
+3. Which release this applies to
+--------------------------------
+This license applies to the files released with, and after, the commit that added this file. Copies of the same
+files obtained before it (earlier commits of this repository, earlier downloads from Hugging Face) were released under
+CC-BY-4.0 (nemo8.tnm, nemo_lm.tlm, oido_v2.tlm, oido_es.tnm, oido_es.tlm, oido_es/tokenizer.model). People who
+received those copies keep the CC-BY-4.0 license for them, because Creative Commons licenses cannot be revoked. The files
+released from this change on are under the terms of section 1.
+
+Commercial licenses, and no-cost licenses for collaborations: contact@lokutor.com
