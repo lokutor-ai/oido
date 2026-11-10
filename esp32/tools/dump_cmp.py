@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run a one-core and a two-core TASR_DEBUG_DUMP build on the same clip and print which elements of the dumped tensor differ.
 
-  . ~/esp/esp-idf/export.sh
+  . $IDF_PATH/export.sh
   (cd firmware; for v in 1 2; do TASR_DEBUG_SUMS=1 TASR_DEBUG_DUMP=1 idf.py -B build_dump$v -D SDKCONFIG=sdkconfig_dump$v \
       -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.nemo16lm" -D TASR_2C=$((v-1)) build; done)
   PYTHON=<python with numpy+soundfile> python tools/dump_cmp.py --port /dev/cu.usbmodemXXXX --model ../models/nemo8.tnm --lm ../models/nemo_lm.tlm --clip c.wav

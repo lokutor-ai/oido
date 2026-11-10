@@ -229,7 +229,7 @@ when you stop only the last partial chunk is left to compute. Partial text appea
 ## Dual core
 
 `TASR_DUAL=1 esp32/tools/flash.sh ...` splits each job across both cores. On our boards at 240 MHz this mode is **not correct**: transcripts come out
-wrong, or the firmware crashes, when both cores run the heavy matrix products at the same time (Guillermo found this first). The same split is correct
+wrong, or the firmware crashes, when both cores run the heavy matrix products at the same time. The same split is correct
 when its two halves run one after the other, when all the work runs on the second core, and with the PIE kernels compiled out (`TASR_NO_SIMD`). Until it is
 understood, firmware builds run on one core. QEMU's estimate for two cores was a real-time factor of 0.7–0.95; QEMU executes the cores in coarse
 alternation and cannot show this.

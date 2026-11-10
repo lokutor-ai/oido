@@ -4,7 +4,7 @@
 Builds with TASR_DEBUG_SUMS print an FNV hash of the log-mel features, the subsampled input and every Conformer layer
 output ("DBG layer 3 1a2b3c4d"). Run the same clip once on each build and report the first stage that differs.
 
-  . ~/esp/esp-idf/export.sh
+  . $IDF_PATH/export.sh
   (cd firmware; for v in 1 2; do TASR_DEBUG_SUMS=1 idf.py -B build_dbg$v -D SDKCONFIG=sdkconfig_dbg$v \
       -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.nemo16lm" -D TASR_2C=$((v-1)) build; done)
   PYTHON=<python with numpy+soundfile> python tools/dual_bisect.py --port /dev/cu.usbmodemXXXX --model ../models/nemo8.tnm \

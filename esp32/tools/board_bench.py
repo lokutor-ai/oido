@@ -2,7 +2,7 @@
 """Run benchmark clips on a connected ESP32-S3 (TASR_MODE=file firmware) and compare with the QEMU / host transcripts.
 
 usage (ESP-IDF's python has pyserial; set PYTHON to a python with numpy + soundfile):
-  . ~/esp/esp-idf/export.sh
+  . $IDF_PATH/export.sh
   PYTHON=$(command -v python3.x) python tools/board_bench.py --port /dev/cu.usbmodemXXXX --model ../models/nemo8.tnm \
       --clips clips.json --out board_nemo8.json [--no-lm] [--dual]
 
