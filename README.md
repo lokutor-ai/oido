@@ -384,6 +384,7 @@ Oído has two parts, under different licenses:
     that are now CC BY-NC-SA 4.0 that you obtained earlier (earlier commits, earlier Hugging Face downloads) keep the
     CC-BY-4.0 license they were released under.
 - Where each model comes from and the third-party attributions are in [`NOTICE`](NOTICE).
+- The papers in `docs/`: the licence sentence of `docs/oido-paper-v1.pdf` (a historical v1) is superseded by [`models/LICENSE-WEIGHTS`](models/LICENSE-WEIGHTS). `docs/oido-paper.pdf` (v2) and its LaTeX source carry the current statement.
 
 **Commercial licenses** (for the code without GPL obligations, and for the non-commercial model files), and no-cost
 licenses for collaborations: **contact@lokutor.com**. See [`COMMERCIAL.md`](COMMERCIAL.md).
