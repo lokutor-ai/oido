@@ -1,14 +1,14 @@
 # Oído models: terms of use
 
 These terms come with the Oído model files that are licensed under
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode): `nemo8.tnm`, `nemo_lm.tlm`,
-`oido_v2.tlm`, `oido_es.tnm`, `oido_es.tlm` and `oido_es/tokenizer.model` (the list is in
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode): `nemo8.tnm`, `nemo4.tnm`,
+`oido_stream.tnm`, `oido_v2a.tnm`, `oido_v2b.tnm`, `oido_es.tnm`, `nemo_lm.tlm`, `oido_v2.tlm`, `oido_es.tlm` and
+`oido_es/tokenizer.model` (the list is in
 [`LICENSE-WEIGHTS`](LICENSE-WEIGHTS)). They are distributed in this repository and through
 [huggingface.co/lokutor-ai](https://huggingface.co/lokutor-ai). By downloading or using these files you agree to
 them. They add to the files' license and do not replace it. Where the two overlap, both apply. Nothing here restricts
-the GPLv3 source code of the engine, firmware and tools, and nothing here applies to the files that are under
-CC-BY-SA-4.0 or CC-BY-4.0 (`nemo4.tnm`, `oido_stream.tnm`, `oido_v2a.tnm`, `oido_v2b.tnm`,
-`nemo_small/tokenizer.model`).
+the GPLv3 source code of the engine, firmware and tools, and nothing here applies to NVIDIA's original
+`nemo_small/tokenizer.model`, which is under CC-BY-4.0.
 
 1. **No commercial use without a written license from Lokutor.** This covers the files, anything derived from them
    (fine-tuned, distilled, pruned, quantized or converted files), and running them to produce transcripts. Commercial
