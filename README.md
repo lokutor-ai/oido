@@ -230,6 +230,8 @@ when you stop only the last partial chunk is left to compute. Partial text appea
 
 ## Dual core
 
+> **Status (12 November 2026).** Real time no longer depends on this: the v2 models run at 0.54-0.72 of the audio duration on **one** core (see [Real time (v2)](#real-time-v2)), so two cores would now be an optional speed-up, and the two-core mode stays off in the firmware. The failure below is still unsolved and the best explanation is still a supply collapse under dense two-core SIMD load. The measurements on this page were made with the v1 models; the core split below has not been re-measured on v2. Where help is most useful: run `TASR_DUAL=1` on another board or a bench supply and report the result of `esp32/tools/dual_bisect.py` together with the board, supply and cable; measure the 3.3 V rail with an oscilloscope while both cores run the matrix products; or try the `tasr_par_mask` split with a v2 model and report the real-time factor. Discussion: [issue #2](https://github.com/lokutor-ai/oido/issues/2).
+
 `TASR_DUAL=1 esp32/tools/flash.sh ...` splits each job across both cores. On our boards at 240 MHz this mode is **not correct**: transcripts come out
 wrong, or the firmware crashes, when both cores run the heavy matrix products at the same time. The same split is correct
 when its two halves run one after the other, when all the work runs on the second core, and with the PIE kernels compiled out (`TASR_NO_SIMD`). Until it is
